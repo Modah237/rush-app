@@ -1,26 +1,151 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand colors */
+  --red: #F50012;
+  --red-600: #D70010;
+  --red-700: #B3000D;
+  --red-tint: #FFE9EB;
+  --red-tint-2: #FFF4F5;
+
+  /* Ink / neutrals (warm) */
+  --ink: #1A1413;
+  --ink-2: #4A4240;
+  --ink-3: #8A817D;
+  --ink-4: #B7AFAB;
+  --line: #ECE7E5;
+  --line-2: #F4F0EE;
+  --surface: #FFFFFF;
+  --bg-app: #FBF8F7;
+  --bg-app-2: #F6F2F0;
+
+  /* Accents */
+  --green: #15A05A;
+  --green-tint: #E6F6EC;
+  --amber: #E2730B;
+  --amber-tint: #FFF1E2;
+  --blue: #2563EB;
+
+  /* Shadow */
+  --sh-1: 0 1px 2px rgba(26,20,19,.06), 0 1px 3px rgba(26,20,19,.05);
+  --sh-2: 0 6px 18px rgba(26,20,19,.08), 0 2px 6px rgba(26,20,19,.05);
+  --sh-3: 0 14px 40px rgba(26,20,19,.14);
+  --sh-red: 0 8px 22px rgba(245,0,18,.30);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@theme {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Colors */
+  --color-brand: var(--red);
+  --color-brand-hover: var(--red-600);
+  --color-brand-active: var(--red-700);
+  --color-brand-tint: var(--red-tint);
+  --color-brand-tint-2: var(--red-tint-2);
+  
+  --color-ink: var(--ink);
+  --color-ink-light: var(--ink-2);
+  --color-ink-muted: var(--ink-3);
+  --color-ink-placeholder: var(--ink-4);
+  
+  --color-border-warm: var(--line);
+  --color-border-warm-light: var(--line-2);
+  
+  --color-bg-app: var(--bg-app);
+  --color-bg-app-light: var(--bg-app-2);
+  --color-surface: var(--surface);
+
+  --color-success: var(--green);
+  --color-success-tint: var(--green-tint);
+  --color-warning: var(--amber);
+  --color-warning-tint: var(--amber-tint);
+  --color-info: var(--blue);
+
+  /* Radii */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-warm-1: var(--sh-1);
+  --shadow-warm-2: var(--sh-2);
+  --shadow-warm-3: var(--sh-3);
+  --shadow-brand: var(--sh-red);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-app);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Page transitions & animations */
+.page-enter {
+  animation: pageIn 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.rise {
+  animation: rise 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Custom Hide Scrollbar */
+.hide-scroll::-webkit-scrollbar {
+  display: none;
+}
+.hide-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Skeleton loader anim */
+.sk-anim {
+  background: linear-gradient(100deg, var(--bg-app-2) 30%, #efe9e7 50%, var(--bg-app-2) 70%);
+  background-size: 200% 100%;
+  animation: sk 1.2s infinite;
+  border-radius: 10px;
+}
+
+@keyframes sk {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
 }
