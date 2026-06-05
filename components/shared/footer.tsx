@@ -17,15 +17,26 @@ export const Footer: React.FC = () => {
             <p className="max-w-[280px] text-[13.5px] font-semibold leading-relaxed text-white/55">
               Votre quartier livré maintenant. Courses, repas et essentiels livrés rapidement à Douala.
             </p>
-            <div className="flex items-center gap-2 text-[13px] font-bold text-white/65 mt-2">
+            <div className="flex items-center gap-2 text-[13px] font-bold text-white/65 mt-1">
               <Icon name="pin" size={15} className="text-brand" />
               <span>Zone : Douala, Cameroun</span>
+            </div>
+            <div className="mt-3">
+              <div className="text-[11px] font-bold text-white/45 mb-2 uppercase tracking-wider">Paiements sécurisés</div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black tracking-wide text-white/82 shadow-sm">
+                  MTN MoMo
+                </span>
+                <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black tracking-wide text-white/82 shadow-sm">
+                  Orange Money
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Client Links */}
           <div className="flex flex-col gap-3">
-            <div className="text-[15px] font-black text-white tracking-wide">Rush</div>
+            <div className="text-[15px] font-black text-white tracking-wide">RUSH</div>
             <ul className="flex flex-col gap-2.5">
               <li>
                 <Link href="/" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
@@ -52,49 +63,51 @@ export const Footer: React.FC = () => {
 
           {/* Partners */}
           <div className="flex flex-col gap-3">
-            <div className="text-[15px] font-black text-white tracking-wide">Devenir partenaire</div>
+            <div className="text-[15px] font-black text-white tracking-wide">Partenaires</div>
             <ul className="flex flex-col gap-2.5">
               <li>
                 <Link href="/merchant" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
-                  Rush merchants
+                  merchant.rush
                 </Link>
               </li>
               <li>
-                <Link href="/courier" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
-                  Rushers
+                <Link href="/rider" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
+                  rider.rush
                 </Link>
               </li>
-              <li className="text-[12.5px] font-semibold leading-normal text-white/45 mt-1">
-                Vendez ou livrez dans votre quartier avec un flux simple et sécurisé.
+              <li>
+                <Link href="/drive" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
+                  drive.rush
+                </Link>
               </li>
             </ul>
           </div>
 
-          {/* Support & Payments */}
-          <div className="flex flex-col gap-3.5">
-            <div className="text-[15px] font-black text-white tracking-wide">Support & Contact</div>
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center gap-2 text-[13.5px] font-semibold text-white/62">
-                <Icon name="phone" size={14} className="text-brand" />
-                <span>+237 6 78 45 12 90</span>
-              </div>
-              <div className="flex items-center gap-2 text-[13.5px] font-semibold text-white/62">
-                <Icon name="headset" size={14} className="text-brand" />
-                <span>Support local 7j/7</span>
-              </div>
-            </div>
-
-            <div className="mt-2">
-              <div className="text-[12px] font-bold text-white/45 mb-2">Paiements sécurisés</div>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-black tracking-wide text-white/82 shadow-sm">
-                  MTN MoMo
-                </span>
-                <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-black tracking-wide text-white/82 shadow-sm">
-                  Orange Money
-                </span>
-              </div>
-            </div>
+          {/* Help & Legal */}
+          <div className="flex flex-col gap-3">
+            <div className="text-[15px] font-black text-white tracking-wide">Support & Légal</div>
+            <ul className="flex flex-col gap-2.5">
+              <li>
+                <Link href="/help" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
+                  Aide & FAQ
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
+                  Conditions Générales
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
+                  Confidentialité
+                </Link>
+              </li>
+              <li>
+                <Link href="/refunds" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
+                  Remboursements
+                </Link>
+              </li>
+            </ul>
           </div>
         </div>
 

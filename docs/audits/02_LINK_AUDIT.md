@@ -1,43 +1,44 @@
-# RUSH — 02 Internal Link Audit
+# RUSH — Internal Link Audit Report (Phase 2 & 3)
 
-Réalisé le 5 juin 2026.
+Ce rapport recense la configuration des composants de navigation et des éléments interactifs (liens `<Link>`, boutons `router.push`, redirections) pour garantir une navigation cohérente et sans erreurs de routage.
 
-## Tableau de conformité des liens
+## Matrice des Liens Internes & Actions de Navigation
 
-| Source file | Label/action | Current href | Target exists? | Status | Fix |
-| :--- | :--- | :--- | :---: | :---: | :--- |
-| `components/shared/header.tsx` | Logo / RUSH | `/` | Oui | OK | Aucun |
-| `components/shared/header.tsx` | Icône Panier | `/cart` | Oui | OK | Aucun |
-| `components/shared/header.tsx` | Icône Compte | `/account` | Oui | OK | Aucun |
-| `components/shared/header.tsx` | Lien Admin | `/admin` | Oui | OK | Aucun |
-| `components/shared/footer.tsx` | Accueil | `/` | Oui | OK | Aucun |
-| `components/shared/footer.tsx` | Explorer | `/categories` | Oui | OK | Aucun |
-| `components/shared/footer.tsx` | Commandes | `/orders` | Oui | OK | Aucun |
-| `components/shared/footer.tsx` | Panier | `/cart` | Oui | OK | Aucun |
-| `components/shared/footer.tsx` | Espace Commerçant | `/merchant` | Oui | OK | Aucun |
-| `components/shared/footer.tsx` | Espace Livreur | `/courier` | Oui | OK | Aucun |
-| `components/shared/footer.tsx` | Admin | `/admin` | Oui | OK | Aucun |
-| `components/shared/footer.tsx` | C.G.U. / Mentions | `/terms` | Oui | OK | Aucun |
-| `app/page.tsx` | Clic Catégorie | `/categories` | Oui | OK | Aucun |
-| `app/page.tsx` | Clic Banner Promo | `/categories?promo=1` | Oui | OK | Aucun |
-| `app/page.tsx` | Clic Produit Card | `/products/${p.id}` | Oui | OK | Redirige vers `/products/[id]` |
-| `app/page.tsx` | Mon compte | `/account` | Oui | OK | Aucun |
-| `app/categories/page.tsx` | Clic Produit Card | `/products/${product.id}` | Oui | OK | Redirige vers `/products/[id]` |
-| `app/categories/page.tsx` | Aller au panier | `/cart` | Oui | OK | Aucun |
-| `app/products/[id]/page.tsx` | Produits similaires | `/products/${product.id}` | Oui | OK | Redirige vers `/products/[id]` |
-| `app/products/[id]/page.tsx` | Retour aux catégories | `/categories` | Oui | OK | Aucun (redirige sur la page liste) |
-| `app/cart/page.tsx` | Valider mon panier | `/checkout` | Oui | OK | Aucun |
-| `app/cart/page.tsx` | Découvrir les produits | `/categories` | Oui | OK | Aucun |
-| `app/checkout/page.tsx` | Retour panier | `/cart` (ou back) | Oui | OK | Aucun |
-| `app/checkout/page.tsx` | Post-commande | `/orders/${orderId}` | Oui | OK | Redirige vers `/orders/[reference]` |
-| `app/orders/page.tsx` | Suivre en direct | `/orders/${o.id}` | Oui | OK | Redirige vers `/orders/[reference]` |
-| `app/orders/page.tsx` | Voir détails | `/orders/${o.id}` | Oui | OK | Redirige vers `/orders/[reference]` |
-| `app/orders/page.tsx` | Recommander (hist) | `/` (ou reorder) | Oui | OK | Aucun |
-| `app/orders/page.tsx` | Découvrir boutiques | `/` | Oui | OK | Aucun |
-| `app/orders/[reference]/page.tsx` | Recommander commande | `/cart` | Oui | OK | Action vide le panier et ajoute les items |
-| `app/orders/[reference]/page.tsx` | Retour | `/orders` | Oui | OK | Aucun |
-| `app/not-found.tsx` | Retour à l'accueil | `/` | Oui | OK | Aucun |
-| `app/not-found.tsx` | Parcourir les catégories | `/categories` | Oui | OK | Aucun |
+| Source Component | Element Type | Target Path | Old Value | Action | Correct Value | Status |
+| :--- | :--- | :--- | :--- | :---: | :--- | :---: |
+| `Header` | Link | `/` | `/` | None | `/` | **OK** |
+| `Header` | Link | `/categories` | `/categories` | None | `/categories` | **OK** |
+| `Header` | Link | `/promos` | `/categories?promo=1` | Update | `/promos` | **FIX** |
+| `Header` | Link | `/orders` | `/orders` | None | `/orders` | **OK** |
+| `Header` | Link | `/admin` | - | None | *Masqué* | **OK** |
+| `Footer` | Link | `/` | `/` | None | `/` | **OK** |
+| `Footer` | Link | `/merchant` | `/merchant` | None | `/merchant` | **OK** |
+| `Footer` | Link | `/merchant/dashboard`| - | **NEW** | `/merchant/dashboard` | **FIX** |
+| `Footer` | Link | `/rider` | `/courier` | Update | `/rider` | **FIX** |
+| `Footer` | Link | `/rider/dashboard` | - | **NEW** | `/rider/dashboard` | **FIX** |
+| `Footer` | Link | `/drive` | - | **NEW** | `/drive` | **FIX** |
+| `Footer` | Link | `/help` | - | **NEW** | `/help` | **FIX** |
+| `Footer` | Link | `/contact` | - | **NEW** | `/contact` | **FIX** |
+| `Footer` | Link | `/faq` | - | **NEW** | `/faq` | **FIX** |
+| `Footer` | Link | `/privacy` | - | **NEW** | `/privacy` | **FIX** |
+| `Footer` | Link | `/refunds` | - | **NEW** | `/refunds` | **FIX** |
+| `Homepage (Hero)` | Form action | `/categories` | `/categories` | None | `/categories?q=...` | **OK** |
+| `Homepage (Join)` | Card CTA | `/merchant` | - | **NEW** | `/merchant` | **FIX** |
+| `Homepage (Join)` | Card CTA | `/rider` | - | **NEW** | `/rider` | **FIX** |
+| `Homepage (Join)` | Card CTA | `/drive` | - | **NEW** | `/drive` | **FIX** |
+| `ProductCard` | Card link | `/products/[id]` | `/products/[id]` | None | `/products/${p.id}` | **OK** |
+| `OrderCard` | Card link | `/orders/[ref]` | `/orders/[ref]` | None | `/orders/${o.id}` | **OK** |
+| `Courier page` | Redirect | `/rider` | - | **NEW** | `/rider` (redirect) | **FIX** |
 
-## Conclusion de l'audit des liens
-Tous les liens de l'application RUSH ont été entièrement vérifiés. Il n'existe aucun lien brisé (leading code errors) ou pointant vers une route inexistante. Les boutons d'action et les cartes de redirection pointent de façon rigoureusement cohérente vers les structures d'URL Next.js définies (`/products/[id]` et `/orders/[reference]`).
+---
+
+## Directives d'Implémentation des Liens
+
+1. **Utilisation systématique des Route Helpers :**
+   Tous les composants de cartes et de navigation utiliseront les route helpers définis dans `lib/routes.ts` pour générer dynamiquement leurs URLs. Cela préviendra toute coquille de frappe et simplifiera le typage.
+   
+2. **Exclusion d'Admin de la navigation publique :**
+   Aucun bouton "Admin" ne doit figurer dans le Header client standard. L'accès à `/admin` se fait via le logo principal (point rouge) ou l'adresse URL directe.
+   
+3. **Redirections Edge & Client-side :**
+   Toute tentative d'accès à la route obsolète `/courier` sera automatiquement interceptée et redirigée vers `/rider` pour rediriger les livreurs vers la landing page officielle de rider.rush.

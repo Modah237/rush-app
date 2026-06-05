@@ -13,7 +13,7 @@ export const Header: React.FC = () => {
   const navLinks = [
     { label: 'Accueil', href: '/' },
     { label: 'Catégories', href: '/categories' },
-    { label: 'Promos', href: '/categories?promo=1' },
+    { label: 'Promos', href: '/promos' },
     { label: 'Mes commandes', href: '/orders' },
   ];
 

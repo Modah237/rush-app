@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { MOCK_ORDERS } from '@/lib/mock-data';
+import { orderPath } from '@/lib/routes';
 import { Order, OrderStatus } from '@/types';
 import { formatPrice } from '@/lib/utils';
 import Icon from '@/components/shared/icon';
@@ -193,7 +194,7 @@ export default function OrdersPage() {
               return (
                 <div
                   key={o.id}
-                  onClick={() => router.push(`/orders/${o.id}`)}
+                  onClick={() => router.push(orderPath(o.id))}
                   className="bg-surface rounded-[24px] border border-border-warm-light/70 shadow-warm-2 p-5 flex flex-col gap-5 hover:border-brand/10 cursor-pointer transition-all duration-200"
                 >
                   {/* Entête de carte active */}
@@ -347,7 +348,7 @@ export default function OrdersPage() {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        router.push(`/orders/${o.id}`);
+                        router.push(orderPath(o.id));
                       }}
                       className="flex-1 flex h-12 items-center justify-center gap-2 rounded-[14px] bg-brand text-white text-[14px] font-black shadow-brand hover:bg-brand-hover active:scale-[0.98] transition-transform cursor-pointer"
                     >
@@ -374,7 +375,7 @@ export default function OrdersPage() {
               return (
                 <div
                   key={o.id}
-                  onClick={() => router.push(`/orders/${o.id}`)}
+                  onClick={() => router.push(orderPath(o.id))}
                   className="bg-surface rounded-[20px] border border-border-warm-light/60 shadow-warm-1 p-4.5 flex flex-col gap-3.5 hover:shadow-warm-2 cursor-pointer transition-all duration-200"
                 >
                   <div className="flex items-start justify-between gap-3" onClick={(e) => e.stopPropagation()}>
@@ -407,7 +408,7 @@ export default function OrdersPage() {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          router.push(`/orders/${o.id}`);
+                          router.push(orderPath(o.id));
                         }}
                         className="badge bg-white border border-border-warm hover:bg-bg-app-light text-ink-light font-extrabold text-[12.5px] px-3.5 py-1.5 rounded-pill cursor-pointer transition-colors"
                       >

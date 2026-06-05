@@ -1,211 +1,41 @@
-# RUSH — 01 Route Manifest Audit
+# RUSH — Route Audit Report (Phase 2)
 
-Ce document présente l'analyse de chaque route de l'application RUSH, réalisée le 5 juin 2026.
+Ce rapport dresse l'état complet du système de routage Next.js App Router pour la plateforme RUSH, daté du 5 juin 2026.
 
----
+## Manifeste technique des routes (25 Routes)
 
-### Route : `/`
-* **File path :** `app/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Page d'accueil avec hero V3, carrousels de produits, boutiques populaires et badges MoMo/OM.
-* **Incoming links :** Footer, Header, `/products/[id]` (retour)
-* **Outgoing links :** `/categories`, `/account`, `/cart`, `/products/[id]`
-* **Data source :** Local mock data (`MOCK_PRODUCTS`, `MOCK_SHOPS`)
-* **Auth requirement :** Aucun
-* **Status :** OK
-* **Fix required :** Aucun
-
----
-
-### Route : `/categories`
-* **File path :** `app/categories/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Liste de tous les produits filtrables par onglets de catégories.
-* **Incoming links :** Header, Footer, `/cart` (retour), `/checkout` (retour)
-* **Outgoing links :** `/products/[id]`, `/cart`
-* **Data source :** `MOCK_PRODUCTS` et `MOCK_CATEGORIES`
-* **Auth requirement :** Aucun
-* **Status :** OK
-* **Fix required :** Aucun
-
----
-
-### Route : `/categories/[slug]`
-* **File path :** `app/categories/[slug]/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Affiche les produits d'une catégorie spécifique.
-* **Incoming links :** `/categories`, `/`
-* **Outgoing links :** `/products/[id]`
-* **Data source :** `MOCK_PRODUCTS`
-* **Auth requirement :** Aucun
-* **Status :** OK
-* **Fix required :** Aucun
+| Route | File Path | Exists | Current Behavior | Incoming Links | Outgoing Links | Data Source | Auth | Status | Fix Required |
+| :--- | :--- | :---: | :--- | :--- | :--- | :--- | :---: | :---: | :--- |
+| `/` | `app/page.tsx` | **Yes** | Page d'accueil client RUSH | Header, Footer | `/categories`, `/cart`, `/orders`, `/merchant`, `/rider`, `/drive` | `lib/data/` | None | **OK** | Reconstruire pour en faire la vitrine marketplace. |
+| `/categories` | `app/categories/page.tsx` | **Yes** | Liste et filtre des catégories | Header, `/` | `/products/[id]`, `/cart` | `lib/data/` | None | **OK** | Aucune. |
+| `/categories/[slug]` | `app/categories/[slug]/page.tsx` | **Yes** | Catégorie filtrée spécifique | `/categories` | `/products/[id]` | `lib/data/` | None | **OK** | Aucune. |
+| `/products/[id]` | `app/products/[id]/page.tsx` | **Yes** | Détail d'un produit (e.g. `p1`) | `/`, `/categories` | `/cart`, `/categories` | `lib/data/` | None | **OK** | Gérer le cas de produit non trouvé avec l'écran `ProductNotFound`. |
+| `/cart` | `app/cart/page.tsx` | **Yes** | Panier d'achat local client | Header, `/products/[id]` | `/checkout`, `/categories` | `CartContext` | None | **OK** | Aucune. |
+| `/checkout` | `app/checkout/page.tsx` | **Yes** | Écran de validation & paiement MoMo | `/cart` | `/orders/[reference]` | `CartContext` | None | **OK** | Rediriger vers la référence de commande créée. |
+| `/orders` | `app/orders/page.tsx` | **Yes** | Liste des commandes de l'utilisateur | Footer, Header | `/orders/[reference]` | `MOCK_ORDERS` | None | **OK** | Corriger les liens de suivi vers `/orders/[reference]`. |
+| `/orders/[reference]` | `app/orders/[reference]/page.tsx` | **Yes** | Suivi d'une commande (e.g. `RSH-20492`)| `/orders`, `/checkout` | `/orders`, `/` | `MOCK_ORDERS` | None | **OK** | Gérer le cas de commande non trouvée avec l'écran `OrderNotFound`. |
+| `/promos` | `app/promos/page.tsx` | **Yes** | Page des codes de réductions | `/`, Header | `/categories` | Codes mockés | None | **OK** | Aucune. |
+| `/merchant` | `app/merchant/page.tsx` | **Yes** | Acquisition marchands (`merchant.rush`) | Footer | `/merchant/dashboard`, `/` | Statique | None | **OK** | Transformer en landing page acquisition (déplacer dashboard). |
+| `/merchant/dashboard` | `app/merchant/dashboard/page.tsx` | **No** | Dashboard de gestion commerçant | `/merchant` | `/merchant/dashboard` | Supabase & Mock | None | **TODO** | Créer le fichier et y déplacer le code de gestion du catalogue. |
+| `/rider` | `app/rider/page.tsx` | **No** | Acquisition livreurs (`rider.rush`) | Footer | `/rider/dashboard`, `/` | Statique | None | **TODO** | Créer le fichier avec les avantages, conditions et FAQ. |
+| `/rider/dashboard` | `app/rider/dashboard/page.tsx` | **No** | Dashboard de livraison livreurs | `/rider` | `/rider/dashboard` | Mock livreur | None | **TODO** | Créer le fichier et y déplacer la logique de livraison. |
+| `/courier` | `app/courier/page.tsx` | **Yes** | Ancienne route livreur | Footer | `/` | None | None | **BROKEN** | Rediriger immédiatement vers `/rider` via `redirect('/rider')`. |
+| `/drive` | `app/drive/page.tsx` | **No** | Service B2B livraison à la demande | Footer | `/drive`, `/` | Statique | None | **TODO** | Créer la page de présentation drive.rush. |
+| `/admin` | `app/admin/page.tsx` | **Yes** | Dashboard d'administration global | Logo Point, Footer | `/` | Supabase | Admin | **OK** | Protégé par middleware. Masquer de la navigation publique. |
+| `/account` | `app/account/page.tsx` | **Yes** | Gestion du compte et profil client | Header | `/orders`, `/` | Session | None | **OK** | Aucune. |
+| `/login` | - | **No** | Intégré à la page `/account` | Aucun | - | - | - | **OK** | L'authentification est simulée directement dans `/account`. |
+| `/register` | - | **No** | Intégré à la page `/account` | Aucun | - | - | - | **OK** | L'authentification est simulée directement dans `/account`. |
+| `/help` | `app/help/page.tsx` | **No** | Page d'aide et assistance RUSH | Footer | `/` | Statique | None | **TODO** | Créer une page d'aide propre aux couleurs de RUSH. |
+| `/contact` | `app/contact/page.tsx` | **No** | Formulaire de contact | Footer | `/` | Statique | None | **TODO** | Créer une page contact / support. |
+| `/faq` | `app/faq/page.tsx` | **No** | FAQ générale RUSH | Footer | `/` | Statique | None | **TODO** | Créer une page FAQ. |
+| `/terms` | `app/terms/page.tsx` | **Yes** | Conditions Générales d'Utilisation | Footer | `/` | Statique | None | **OK** | Aucune. |
+| `/privacy` | `app/privacy/page.tsx` | **No** | Politique de confidentialité | Footer | `/` | Statique | None | **TODO** | Créer un placeholder premium de charte de vie privée. |
+| `/refunds` | `app/refunds/page.tsx` | **No** | Politique de remboursement | Footer | `/` | Statique | None | **TODO** | Créer un placeholder de remboursement. |
 
 ---
 
-### Route : `/products/[id]`
-* **File path :** `app/products/[id]/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Fiche produit détaillée avec galerie d'images, choix des variantes de prix, avis et bouton d'ajout au panier.
-* **Incoming links :** `/`, `/categories`, `/categories/[slug]`, `/products/[id]` (produits similaires)
-* **Outgoing links :** `/cart`, `/categories`, `/products/[id]`
-* **Data source :** `MOCK_PRODUCTS`
-* **Auth requirement :** Aucun
-* **Status :** OK
-* **Fix required :** Aucun (le bug de dossier `%5Bid%5D` et l'affichage personnalisé pour produit inexistant ont été corrigés).
-
----
-
-### Route : `/cart`
-* **File path :** `app/cart/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Récapitulatif du panier client avec modification des quantités, suppression d'articles et bouton vers le checkout.
-* **Incoming links :** Header, Footer, `/products/[id]`
-* **Outgoing links :** `/checkout`, `/categories` (si panier vide)
-* **Data source :** `cart-context`
-* **Auth requirement :** Aucun
-* **Status :** OK
-* **Fix required :** Aucun
-
----
-
-### Route : `/checkout`
-* **File path :** `app/checkout/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Formulaire de livraison, choix de la passerelle de paiement (MTN MoMo, Orange Money, Cash) et validation de la commande.
-* **Incoming links :** `/cart`
-* **Outgoing links :** `/orders/[reference]` (redirection post-paiement)
-* **Data source :** `cart-context`
-* **Auth requirement :** Optionnel (simulé)
-* **Status :** OK
-* **Fix required :** Aucun
-
----
-
-### Route : `/orders`
-* **File path :** `app/orders/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Historique des commandes de l'utilisateur, séparées en onglets "En cours" et "Historique".
-* **Incoming links :** Header, Footer, `/account`
-* **Outgoing links :** `/orders/[reference]`
-* **Data source :** `MOCK_ORDERS` et Supabase `orders`
-* **Auth requirement :** Authentifié (ou fallback mocké si non connecté)
-* **Status :** OK
-* **Fix required :** Aucun
-
----
-
-### Route : `/orders/[reference]`
-* **File path :** `app/orders/[reference]/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Live tracking de la livraison sur carte SVG stylisée avec timeline animée, liste d'articles, détails livreur et boutons d'action.
-* **Incoming links :** `/orders`, `/checkout` (redirection)
-* **Outgoing links :** `/orders`, `/` (recommander)
-* **Data source :** `MOCK_ORDERS` et Supabase `orders` / `order_items`
-* **Auth requirement :** Authentifié
-* **Status :** OK
-* **Fix required :** Aucun (le dossier `%5Breference%5D` a été corrigé sur disque et la page a été enrichie avec les articles et les actions).
-
----
-
-### Route : `/promos`
-* **File path :** `app/promos/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Liste des codes de réduction et de livraison offerte copiables en un clic.
-* **Incoming links :** Footer, Header
-* **Outgoing links :** `/`
-* **Data source :** Données promotionnelles mockées
-* **Auth requirement :** Aucun
-* **Status :** OK
-* **Fix required :** Aucun (la page a été créée au cours de ce sprint).
-
----
-
-### Route : `/merchant`
-* **File path :** `app/merchant/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Tableau de bord de simulation pour les commerçants (gestion des produits, abonnements, ventes).
-* **Incoming links :** Footer
-* **Outgoing links :** `/`
-* **Data source :** Profil boutique
-* **Auth requirement :** Authentifié (rôle vendor)
-* **Status :** PLACEHOLDER CLEAN
-* **Fix required :** Aucun (bel écran de simulation fonctionnelle).
-
----
-
-### Route : `/courier`
-* **File path :** `app/courier/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Tableau de bord de simulation pour les livreurs (soumission des pièces d'identité, suivi de livraison).
-* **Incoming links :** Footer
-* **Outgoing links :** `/`
-* **Data source :** Profil livreur
-* **Auth requirement :** Authentifié (rôle courier)
-* **Status :** PLACEHOLDER CLEAN
-* **Fix required :** Aucun (bel écran de simulation fonctionnelle).
-
----
-
-### Route : `/admin`
-* **File path :** `app/admin/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Supervision globale de la plateforme (validation des boutiques, livreurs et suivi financier).
-* **Incoming links :** Footer, Header
-* **Outgoing links :** `/`
-* **Data source :** Supabase stats
-* **Auth requirement :** Authentifié (rôle admin requis via middleware)
-* **Status :** OK
-* **Fix required :** Aucun (redirection vers `/account` pour connexion si non authentifié et vers `/` si non-admin).
-
----
-
-### Route : `/account`
-* **File path :** `app/account/page.tsx`
-* **Exists :** yes
-* **Current behavior :** Page profil client affichant les points de fidélité, les favoris et les options d'aide.
-* **Incoming links :** Header, `/admin` (redirection)
-* **Outgoing links :** `/orders`, `/` (logout)
-* **Data source :** Profil simulé
-* **Auth requirement :** Aucun
-* **Status :** OK
-* **Fix required :** Aucun
-
----
-
-### Route : `/login`
-* **File path :** Aucun (géré de manière intégrée au sein de `/account`)
-* **Exists :** no
-* **Current behavior :** Gérée sous forme de modal d'auth ou directement dans `/account`.
-* **Incoming links :** Aucun
-* **Outgoing links :** -
-* **Data source :** Supabase Auth
-* **Auth requirement :** -
-* **Status :** OK
-* **Fix required :** Aucun (pas de liens cassés vers cette route).
-
----
-
-### Route : `/register`
-* **File path :** Aucun (géré de manière intégrée au sein de `/account`)
-* **Exists :** no
-* **Current behavior :** Gérée sous forme de modal d'auth ou directement dans `/account`.
-* **Incoming links :** Aucun
-* **Outgoing links :** -
-* **Data source :** Supabase Auth
-* **Auth requirement :** -
-* **Status :** OK
-* **Fix required :** Aucun (pas de liens cassés vers cette route).
-
----
-
-### Route : `/api/webhooks/fapshi`
-* **File path :** `app/api/webhooks/fapshi/route.ts`
-* **Exists :** yes
-* **Current behavior :** Reçoit les requêtes POST de validation de paiement depuis Fapshi et met à jour Supabase.
-* **Incoming links :** Externe (opérateur Fapshi)
-* **Outgoing links :** -
-* **Data source :** Webhook Payload
-* **Auth requirement :** Validation de signature par clé secrète
-* **Status :** OK
-* **Fix required :** Aucun
+## Synthèse du Plan de Réparation
+1. **Création des pages d'acquisition :** `/rider` et `/drive` seront créées comme de nouveaux répertoires et fichiers physiques.
+2. **Scission de l'Espace Marchand :** La route `/merchant` devient statique et le dashboard est déplacé sous `/merchant/dashboard`.
+3. **Scission de l'Espace Livreur :** La route `/rider` devient statique et le dashboard est créé sous `/rider/dashboard`. La route historique `/courier` effectue une redirection automatique vers `/rider`.
+4. **Création des placeholders premium :** Les pages `/help`, `/contact`, `/faq`, `/privacy`, et `/refunds` seront ajoutées pour éviter toute 404 brute.

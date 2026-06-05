@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/context/cart-context';
 import { MOCK_PRODUCTS, getVariantsForProduct } from '@/lib/mock-data';
+import { productPath } from '@/lib/routes';
 import { getCategoryTheme } from '@/components/shared/category-theme';
 import { formatPrice } from '@/lib/utils';
 import Icon from '@/components/shared/icon';
@@ -301,7 +302,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
             <ProductMini 
               key={s.id} 
               p={s} 
-              onOpen={(product) => router.push(`/products/${product.id}`)}
+              onOpen={(product) => router.push(productPath(product.id))}
               onAdd={(product) => addToCart(product, 1)}
             />
           ))}

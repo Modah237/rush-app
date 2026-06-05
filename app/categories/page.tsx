@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/context/cart-context';
 import { MOCK_CATEGORIES, MOCK_PRODUCTS } from '@/lib/mock-data';
+import { productPath } from '@/lib/routes';
 import { Product } from '@/types';
 import Icon from '@/components/shared/icon';
 import ProductCard from '@/components/shared/product-card';
@@ -141,7 +142,7 @@ function CategoriesContent() {
               <ProductCard 
                 key={p.id} 
                 p={p} 
-                onOpen={(product) => router.push(`/products/${product.id}`)}
+                onOpen={(product) => router.push(productPath(product.id))}
                 onAdd={(product) => addToCart(product, 1)}
               />
             ))}

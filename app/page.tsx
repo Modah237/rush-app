@@ -3,6 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { productPath } from '@/lib/routes';
 import { useCart } from '@/context/cart-context';
 import { MOCK_PRODUCTS, MOCK_SHOPS } from '@/lib/mock-data';
 import Icon from '@/components/shared/icon';
@@ -34,7 +35,7 @@ export default function Home() {
       title: 'Votre première commande allégée.',
       subtitle: 'Courses fraîches, repas et essentiels livrés à Akwa, Bonapriso et Deido.',
       cta: 'Voir les offres',
-      image: MOCK_PRODUCTS[0].image_url,
+      image: '/rush/home/banner-promo-1.jpg',
       tone: 'bg-[#1A1413]',
     },
     {
@@ -43,7 +44,7 @@ export default function Home() {
       title: 'Payez simple, recevez vite.',
       subtitle: 'MTN MoMo, Orange Money et suivi live de votre commande RUSH.',
       cta: 'Commander',
-      image: MOCK_PRODUCTS[4].image_url,
+      image: '/rush/home/banner-promo-2.jpg',
       tone: 'bg-[#0B3A26]',
     },
     {
@@ -52,7 +53,7 @@ export default function Home() {
       title: 'Riz, huile, eau et œufs réunis.',
       subtitle: 'Les essentiels de la maison sans détour au marché.',
       cta: 'Découvrir',
-      image: MOCK_PRODUCTS[2].image_url,
+      image: '/rush/home/banner-promo-3.jpg',
       tone: 'bg-[#5B2508]',
     },
   ];
@@ -62,7 +63,9 @@ export default function Home() {
     { id: 'resto', label: 'Repas', glyph: 'bowl', tint: '#FFF1E2', ink: '#E2730B' },
     { id: 'boissons', label: 'Boissons', glyph: 'bottle', tint: '#E8F1FF', ink: '#2563EB' },
     { id: 'fruits', label: 'Marché frais', glyph: 'leaf', tint: '#E6F6EC', ink: '#15A05A' },
+    { id: 'pharmacie', label: 'Pharmacie', glyph: 'heart', tint: '#FDF2F8', ink: '#DB2777' },
     { id: 'maison', label: 'Maison', glyph: 'spray', tint: '#F0ECFF', ink: '#6D4AE0' },
+    { id: 'colis', label: 'Colis', glyph: 'pkg', tint: '#FEF3C7', ink: '#D97706' },
     { id: 'promos', label: 'Promos', glyph: 'flame', tint: '#FFEBD3', ink: '#FF6B00' },
   ];
 
@@ -154,7 +157,7 @@ export default function Home() {
             
             {/* Courier Image Container */}
             <div className="absolute bottom-0 left-1/2 h-[380px] w-[290px] -translate-x-1/2 overflow-hidden rounded-[28px] bg-[#231A18] shadow-warm-3 border border-white/10">
-              <img src="/assets/rush_courier.png" alt="Livreur RUSH avec sac de livraison" className="h-full w-full object-cover" />
+              <img src="/rush/rider/courier-hero.jpg" alt="Livreur RUSH avec sac de livraison" className="h-full w-full object-cover" />
             </div>
 
             {/* Card 1: 25 min (Top-Left) */}
@@ -205,7 +208,7 @@ export default function Home() {
           {categories.map((category) => (
             <button
               key={category.id}
-              onClick={() => router.push(category.id === 'promos' ? '/categories?promo=1' : `/categories?cat=${category.id}`)}
+              onClick={() => router.push(category.id === 'promos' ? '/promos' : `/categories?cat=${category.id}`)}
               className="group flex w-[82px] flex-none cursor-pointer flex-col items-center gap-2"
             >
               <span className="flex h-16 w-16 items-center justify-center rounded-[18px] border border-border-warm-light/70 shadow-warm-1 transition-transform group-hover:scale-105" style={{ backgroundColor: category.tint, color: category.ink }}>
@@ -222,7 +225,7 @@ export default function Home() {
         {promoBanners.map((banner) => (
           <button
             key={banner.id}
-            onClick={() => router.push('/categories?promo=1')}
+            onClick={() => router.push('/promos')}
             className={`${banner.tone} group relative min-h-[180px] overflow-hidden rounded-[24px] p-5 text-left text-white shadow-warm-2 border border-white/5 hover:scale-[1.01] transition-all duration-200`}
           >
             {/* Image card aligned to the right (never overlays text) */}
@@ -262,7 +265,7 @@ export default function Home() {
             <ProductMini
               key={product.id}
               p={product}
-              onOpen={(p) => router.push(`/products/${p.id}`)}
+              onOpen={(p) => router.push(productPath(p.id))}
               onAdd={(p, e) => {
                 e.stopPropagation();
                 addToCart(p, 1);
@@ -298,7 +301,7 @@ export default function Home() {
             <ProductCard
               key={product.id}
               p={product}
-              onOpen={(p) => router.push(`/products/${p.id}`)}
+              onOpen={(p) => router.push(productPath(p.id))}
               onAdd={(p, e) => {
                 e.stopPropagation();
                 addToCart(p, 1);
@@ -310,9 +313,9 @@ export default function Home() {
 
       <section className="grid grid-cols-1 gap-3 px-4 md:grid-cols-3 md:px-0">
         {[
-          { icon: 'truck', title: 'Livraison rapide', text: 'Un livreur RUSH récupère votre commande dans votre zone.' },
-          { icon: 'wallet', title: 'Paiement local', text: 'MTN MoMo, Orange Money et options adaptées au Cameroun.' },
-          { icon: 'headset', title: 'Support Douala', text: 'Assistance locale pour clients, commerçants et livreurs.' },
+          { icon: 'truck', title: 'Choisissez', text: 'Parcourez les catégories et ajoutez vos articles préférés.' },
+          { icon: 'wallet', title: 'Payez simple', text: 'Réglez par MTN MoMo, Orange Money ou cash à la livraison.' },
+          { icon: 'headset', title: 'Recevez vite', text: 'Un Rusher récupère et livre votre commande en 25 minutes.' },
         ].map((item) => (
           <div key={item.title} className="flex items-center gap-3 rounded-[20px] border border-border-warm-light bg-surface p-4 shadow-warm-1">
             <span className="flex h-11 w-11 flex-none items-center justify-center rounded-[15px] bg-brand-tint text-brand">
@@ -324,6 +327,57 @@ export default function Home() {
             </div>
           </div>
         ))}
+      </section>
+
+      {/* Join RUSH Section */}
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-black tracking-tight text-ink px-4 md:px-0">Rejoindre RUSH</h2>
+        <div className="grid grid-cols-1 gap-4 px-4 md:grid-cols-3 md:px-0">
+          <div className="card bg-surface p-5 rounded-[20px] border border-border-warm-light shadow-warm-1 flex flex-col justify-between min-h-[180px]">
+            <div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-brand-tint text-brand mb-3">
+                <Icon name="bag" size={20} />
+              </span>
+              <h3 className="font-black text-[16px] text-ink">merchant.rush</h3>
+              <p className="text-[12.5px] font-semibold text-ink-light mt-1.5 leading-relaxed">
+                Développez vos ventes à Douala. Mettez vos produits en ligne et recevez des commandes payées par MoMo.
+              </p>
+            </div>
+            <Link href="/merchant" className="mt-4 text-[13px] font-black text-brand hover:underline flex items-center gap-1">
+              Devenir partenaire <Icon name="chevR" size={12} stroke={2.4} />
+            </Link>
+          </div>
+
+          <div className="card bg-surface p-5 rounded-[20px] border border-border-warm-light shadow-warm-1 flex flex-col justify-between min-h-[180px]">
+            <div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-green-tint text-success mb-3">
+                <Icon name="truck" size={20} />
+              </span>
+              <h3 className="font-black text-[16px] text-ink">rider.rush</h3>
+              <p className="text-[12.5px] font-semibold text-ink-light mt-1.5 leading-relaxed">
+                Devenez Rusher. Livrez des courses ou repas à moto et gagnez des revenus réguliers avec une assistance locale.
+              </p>
+            </div>
+            <Link href="/rider" className="mt-4 text-[13px] font-black text-success hover:underline flex items-center gap-1">
+              Devenir Rusher <Icon name="chevR" size={12} stroke={2.4} />
+            </Link>
+          </div>
+
+          <div className="card bg-surface p-5 rounded-[20px] border border-border-warm-light shadow-warm-1 flex flex-col justify-between min-h-[180px]">
+            <div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-info/10 text-info mb-3">
+                <Icon name="pkg" size={20} />
+              </span>
+              <h3 className="font-black text-[16px] text-ink">drive.rush</h3>
+              <p className="text-[12.5px] font-semibold text-ink-light mt-1.5 leading-relaxed">
+                Livraison à la demande pour votre commerce WhatsApp ou Instagram. Sans gérer de flotte de motos.
+              </p>
+            </div>
+            <Link href="/drive" className="mt-4 text-[13px] font-black text-info hover:underline flex items-center gap-1">
+              Utiliser drive.rush <Icon name="chevR" size={12} stroke={2.4} />
+            </Link>
+          </div>
+        </div>
       </section>
     </div>
   );
