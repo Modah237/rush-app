@@ -1,0 +1,22 @@
+# RUSH — Checklist Audit Complet & Renforcement
+
+- `[x]` Rédiger les 13 rapports d'audit dans `docs/audits/`
+  - `[x]` 00_REPOSITORY_AUDIT.md
+  - `[x]` 01_ROUTE_AUDIT.md
+  - `[x]` 02_LINK_AUDIT.md
+  - `[x]` 03_DATA_MODEL_AUDIT.md
+  - `[x]` 04_CART_CHECKOUT_AUDIT.md
+  - `[x]` 05_ORDERS_FLOW_AUDIT.md
+  - `[x]` 06_VENDOR_AUDIT.md
+  - `[x]` 07_COURIER_AUDIT.md
+  - `[x]` 08_ADMIN_AUDIT.md
+  - `[x]` 09_SUPABASE_RLS_AUDIT.md
+  - `[x]` 10_PAYMENT_AUDIT.md
+  - `[x]` 11_IMAGE_UI_AUDIT.md
+  - `[x]` 12_MANUAL_QA.md
+- `[x]` Exécuter les commandes de validation finale
+  - `[x]` bun run lint
+  - `[x]` tsc --noEmit
+  - `[x]` bun test
+  - `[x]` bun run build
+- `[ ]` Pousser les fichiers d'audit sur GitHub
