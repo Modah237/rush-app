@@ -25,7 +25,7 @@ export const Footer: React.FC = () => {
 
           {/* Client Links */}
           <div className="flex flex-col gap-3">
-            <div className="text-[15px] font-black text-white tracking-wide">Client RUSH</div>
+            <div className="text-[15px] font-black text-white tracking-wide">Rush</div>
             <ul className="flex flex-col gap-2.5">
               <li>
                 <Link href="/" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
@@ -56,12 +56,12 @@ export const Footer: React.FC = () => {
             <ul className="flex flex-col gap-2.5">
               <li>
                 <Link href="/merchant" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
-                  Espace commerçant
+                  Rush merchants
                 </Link>
               </li>
               <li>
                 <Link href="/courier" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
-                  Espace livreur
+                  Rushers
                 </Link>
               </li>
               <li className="text-[12.5px] font-semibold leading-normal text-white/45 mt-1">

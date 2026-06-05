@@ -39,10 +39,10 @@ export default function CourierPage() {
             <span className="w-9 h-9 rounded-md bg-white/10 flex items-center justify-center">
               <Icon name="truck" size={20} />
             </span>
-            <h1 className="font-black text-xl tracking-tight">Espace Livreur RUSH</h1>
+            <h1 className="font-black text-xl tracking-tight">Rushers</h1>
           </div>
           <p className="text-[12px] text-white/60 font-semibold mt-1">
-            Livreur Partenaire · Moto de livraison · Douala
+            Rushers Partenaire · Moto de livraison · Douala
           </p>
         </div>
 

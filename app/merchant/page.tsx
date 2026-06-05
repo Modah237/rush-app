@@ -149,7 +149,7 @@ export default function MerchantPage() {
             <h1 className="font-black text-xl tracking-tight">{shop.name}</h1>
           </div>
           <p className="text-[12px] text-white/60 font-semibold mt-1">
-            Commerçant · {shop.category} · Douala, Cameroun
+            Rush merchants · {shop.category} · Douala, Cameroun
           </p>
         </div>
 
