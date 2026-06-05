@@ -19,4 +19,4 @@
   - `[x]` tsc --noEmit
   - `[x]` bun test
   - `[x]` bun run build
-- `[ ]` Pousser les fichiers d'audit sur GitHub
+- `[x]` Pousser les fichiers d'audit sur GitHub
