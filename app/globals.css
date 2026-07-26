@@ -26,6 +26,12 @@
   --amber-tint: #FFF1E2;
   --blue: #2563EB;
 
+  /* Design Engineering Easing Curves (Emil Kowalski) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+
   /* Shadow */
   --sh-1: 0 1px 2px rgba(26,20,19,.06), 0 1px 3px rgba(26,20,19,.05);
   --sh-2: 0 6px 18px rgba(26,20,19,.08), 0 2px 6px rgba(26,20,19,.05);
@@ -88,15 +94,30 @@ body {
   min-height: 100vh;
 }
 
-/* Page transitions & animations */
+/* Design Engineering - Responsive Active Feedback & Gated Hover */
+button, .btn, [role="button"] {
+  transition: transform 160ms var(--ease-out), background-color 160ms var(--ease-out), opacity 160ms var(--ease-out);
+}
+
+button:active, .btn:active, [role="button"]:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hover-lift:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Page & Component Entry Animations (Never animate from scale(0)) */
 .page-enter {
-  animation: pageIn 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation: pageIn 240ms var(--ease-out) forwards;
 }
 
 @keyframes pageIn {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.99);
+    transform: translateY(8px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -105,7 +126,7 @@ body {
 }
 
 .fade-in {
-  animation: fadeIn 0.3s ease both;
+  animation: fadeIn 200ms var(--ease-out) forwards;
 }
 
 @keyframes fadeIn {
@@ -114,17 +135,46 @@ body {
 }
 
 .rise {
-  animation: rise 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: rise 260ms var(--ease-out) both;
 }
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(12px) scale(0.97);
   }
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* Sheet & Modal Entry Animation */
+.animate-sheetUp {
+  animation: sheetUp 280ms var(--ease-drawer) forwards;
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-scaleUp {
+  animation: scaleUp 220ms var(--ease-out) forwards;
+}
+
+@keyframes scaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -148,4 +198,15 @@ body {
 @keyframes sk {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
+}
+
+/* Accessibility: Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter, .fade-in, .rise, .animate-sheetUp, .animate-scaleUp {
+    animation-duration: 150ms !important;
+    transform: none !important;
+  }
+  button:active, .btn:active, [role="button"]:active {
+    transform: none !important;
+  }
 }
