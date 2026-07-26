@@ -74,7 +74,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         src={src}
         alt={alt}
         onError={() => setError(true)}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-cover transition-opacity duration-200 var(--ease-out)"
         loading="eager"
       />
     </div>
