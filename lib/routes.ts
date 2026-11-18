@@ -17,3 +17,7 @@ export function riderPath(): string {
 export function drivePath(): string {
   return `/drive`;
 }
+
+export function mapPath(): string {
+  return `/carte`;
+}

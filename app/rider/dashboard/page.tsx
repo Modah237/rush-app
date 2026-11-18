@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MOCK_ORDERS } from '@/lib/mock-data';
+import { MOCK_ORDERS, MOCK_SHOPS } from '@/lib/mock-data';
 import { Order, OrderStatus } from '@/types';
 import { formatPrice } from '@/lib/utils';
 import Icon from '@/components/shared/icon';
 import Link from 'next/link';
+import CameroonMap from '@/components/maps/cameroon-map';
+import { calculateDistanceKm, resolveLocationFromText } from '@/lib/cameroon-geo';
 
 export default function RiderDashboardPage() {
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verified' | 'unsubmitted'>('unsubmitted');
@@ -170,7 +172,61 @@ export default function RiderDashboardPage() {
       {/* État 3 : Compte Validé - Tableau de bord de livraison */}
       {verificationStatus === 'verified' && (
         <div className="flex flex-col gap-4">
-          <h2 className="font-black text-lg text-ink">Courses assignées</h2>
+          <h2 className="font-black text-lg text-ink">Courses assignées & Itinéraire Cameroun</h2>
+
+          {activeOrders.length > 0 && (() => {
+            const firstOrder = activeOrders[0];
+            const shopLoc = MOCK_SHOPS.find((s) => s.id === firstOrder.shop_id);
+            const pLat = shopLoc?.lat ?? 4.0548;
+            const pLng = shopLoc?.lng ?? 9.7012;
+            const dLoc = resolveLocationFromText(firstOrder.delivery_address);
+            const distKm = calculateDistanceKm(pLat, pLng, dLoc.lat, dLoc.lng);
+            return (
+              <div className="flex flex-col gap-2">
+                <CameroonMap
+                  center={[pLat, pLng]}
+                  zoom={14}
+                  fitMarkers
+                  showLocateButton
+                  heightClassName="h-[260px]"
+                  interactiveHint={`Mission ${firstOrder.id} · ${distKm} km (${dLoc.cityName})`}
+                  markers={[
+                    {
+                      id: 'rider-pickup',
+                      lat: pLat,
+                      lng: pLng,
+                      title: firstOrder.shop_name || 'Point de retrait',
+                      subtitle: shopLoc?.quarter || 'Douala',
+                      badge: 'Retrait',
+                      variant: 'pickup',
+                    },
+                    {
+                      id: 'rider-dropoff',
+                      lat: dLoc.lat,
+                      lng: dLoc.lng,
+                      title: `Livraison · ${firstOrder.id}`,
+                      subtitle: firstOrder.delivery_address,
+                      badge: `${distKm} km`,
+                      variant: 'dropoff',
+                      pulse: true,
+                    },
+                  ]}
+                  routes={[
+                    {
+                      id: 'rider-mission-route',
+                      points: [
+                        [pLat, pLng],
+                        [dLoc.lat, dLoc.lng],
+                      ],
+                      color: '#15A05A',
+                      dashed: true,
+                      weight: 4,
+                    },
+                  ]}
+                />
+              </div>
+            );
+          })()}
           
           {activeOrders.map((o) => (
             <div key={o.id} className="card bg-surface p-4.5 rounded-lg shadow-warm-1 flex flex-col gap-3.5">

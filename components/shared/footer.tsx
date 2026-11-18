@@ -17,10 +17,10 @@ export const Footer: React.FC = () => {
             <p className="max-w-[280px] text-[13.5px] font-semibold leading-relaxed text-white/55">
               Votre quartier livré maintenant. Courses, repas et essentiels livrés rapidement à Douala.
             </p>
-            <div className="flex items-center gap-2 text-[13px] font-bold text-white/65 mt-1">
+            <Link href="/carte" className="flex items-center gap-2 text-[13px] font-bold text-white/75 hover:text-brand transition-colors mt-1 w-fit">
               <Icon name="pin" size={15} className="text-brand" />
-              <span>Zone : Douala, Cameroun</span>
-            </div>
+              <span>Carte : Cameroun (Douala, Yaoundé & 10 régions)</span>
+            </Link>
             <div className="mt-3">
               <div className="text-[11px] font-bold text-white/45 mb-2 uppercase tracking-wider">Paiements sécurisés</div>
               <div className="flex flex-wrap gap-2">
@@ -46,6 +46,11 @@ export const Footer: React.FC = () => {
               <li>
                 <Link href="/categories" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
                   Catégories
+                </Link>
+              </li>
+              <li>
+                <Link href="/carte" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
+                  Carte Cameroun
                 </Link>
               </li>
               <li>

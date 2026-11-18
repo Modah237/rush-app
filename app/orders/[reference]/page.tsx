@@ -3,7 +3,9 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Order, OrderStatus } from '@/types';
-import { MOCK_ORDERS, MOCK_PRODUCTS } from '@/lib/mock-data';
+import { MOCK_ORDERS, MOCK_PRODUCTS, MOCK_SHOPS } from '@/lib/mock-data';
+import { calculateDistanceKm, resolveLocationFromText } from '@/lib/cameroon-geo';
+import CameroonMap from '@/components/maps/cameroon-map';
 import Icon from '@/components/shared/icon';
 import { formatPrice } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -186,8 +188,19 @@ export default function OrderTrackingPage({ params }: TrackingPageProps) {
     );
   }
 
-  // Calcul du temps estimé dynamique
+  // Calcul du temps estimé dynamique et coordonnées GPS Cameroun
   const etaMinutes = order.eta_minutes ?? (activeStep >= 3 ? 0 : 12 - activeStep * 4);
+  const shopLocation = MOCK_SHOPS.find((s) => s.id === order.shop_id);
+  const pickupLat = shopLocation?.lat ?? 4.0548;
+  const pickupLng = shopLocation?.lng ?? 9.7012;
+  const dropoffResolved = resolveLocationFromText(order.delivery_address);
+  const dropoffLat = order.delivery_lat ?? dropoffResolved.lat;
+  const dropoffLng = order.delivery_lng ?? dropoffResolved.lng;
+
+  const progressRatio = activeStep === 0 ? 0.05 : activeStep === 1 ? 0.3 : activeStep === 2 ? 0.72 : 1;
+  const riderLat = pickupLat + (dropoffLat - pickupLat) * progressRatio;
+  const riderLng = pickupLng + (dropoffLng - pickupLng) * progressRatio;
+  const routeDistanceKm = calculateDistanceKm(pickupLat, pickupLng, dropoffLat, dropoffLng);
 
   const handleReorder = () => {
     clearCart();
@@ -236,59 +249,75 @@ export default function OrderTrackingPage({ params }: TrackingPageProps) {
       {/* Grid adaptative */}
       <div className="flex flex-col md:flex-row gap-6 items-start">
         
-        {/* Colonne gauche : Carte & Détails du livreur */}
+        {/* Colonne gauche : Carte réelle du Cameroun & Détails du livreur */}
         <div className="flex-1 flex flex-col gap-4.5 w-full">
-          {/* Carte SVG stylisée */}
-          <div className="h-[210px] w-full rounded-lg overflow-hidden relative bg-gradient-to-br from-[#EAF1EC] to-[#F4F0EE] shadow-warm-1">
-            <svg width="100%" height="100%" viewBox="0 0 400 210" className="absolute inset-0 select-none">
-              <g stroke="#D8E0D9" strokeWidth="2" fill="none">
-                <path d="M0 50 H400 M0 110 H400 M0 170 H400 M80 0 V210 M200 0 V210 M320 0 V210" />
-              </g>
-              {/* Tracé de livraison en rouge */}
-              <path 
-                d="M60 180 Q120 150 150 110 T 300 50" 
-                stroke="var(--red)" 
-                strokeWidth="4" 
-                fill="none" 
-                strokeDasharray="2 10" 
-                strokeLinecap="round" 
-              />
-            </svg>
-            
-            {/* Icône de destination (Maison) */}
-            <span className="absolute left-[44px] bottom-[18px] text-ink">
-              <Icon name="home" size={26} />
-            </span>
-            
-            {/* Icône de livreur en mouvement */}
-            <span 
-              className="absolute w-10 h-10 rounded-full bg-brand flex items-center justify-center text-white shadow-brand transition-all duration-1000"
-              style={{
-                left: `${50 + activeStep * 70}px`,
-                bottom: `${20 + activeStep * 35}px`,
-              }}
-            >
-              <Icon name="truck" size={22} />
-            </span>
+          <div className="relative">
+            <CameroonMap
+              center={[riderLat, riderLng]}
+              zoom={14}
+              fitMarkers
+              heightClassName="h-[310px]"
+              markers={[
+                {
+                  id: 'order-shop',
+                  lat: pickupLat,
+                  lng: pickupLng,
+                  title: order.shop_name || 'Boutique RUSH',
+                  subtitle: `Retrait · ${shopLocation?.quarter || 'Douala'}`,
+                  badge: 'Départ',
+                  variant: 'shop',
+                },
+                {
+                  id: 'order-rider',
+                  lat: riderLat,
+                  lng: riderLng,
+                  title: `${order.courier_name || 'Eric N.'} · Rusher`,
+                  subtitle: activeStep >= 3 ? 'Arrivé à destination' : `À ${routeDistanceKm} km · ETA ${etaMinutes} min`,
+                  badge: TRACKING_STEPS[activeStep]?.label,
+                  variant: 'rider',
+                  pulse: activeStep < 3,
+                },
+                {
+                  id: 'order-dropoff',
+                  lat: dropoffLat,
+                  lng: dropoffLng,
+                  title: 'Destination client',
+                  subtitle: `${order.delivery_address} (${dropoffResolved.cityName})`,
+                  badge: 'Livraison',
+                  variant: 'customer',
+                },
+              ]}
+              routes={[
+                {
+                  id: 'order-route',
+                  points: [
+                    [pickupLat, pickupLng],
+                    [dropoffLat, dropoffLng],
+                  ],
+                  color: '#F50012',
+                  dashed: true,
+                  weight: 4,
+                },
+              ]}
+            />
 
-            {/* Carte du livreur collée sur l'image */}
-            <div className="absolute left-3.5 right-3.5 bottom-3.5 bg-surface p-3 rounded-md flex items-center gap-3 shadow-warm-2">
+            <div className="mt-3 bg-surface p-3.5 rounded-lg flex items-center gap-3 shadow-warm-1 border border-border-warm-light">
               <span className="w-10 h-10 rounded-md bg-ink text-white flex items-center justify-center flex-none">
                 <Icon name="user" size={20} />
               </span>
-              <div className="flex-1">
-                <div className="font-extrabold text-[13.5px] text-ink leading-tight">
+              <div className="flex-1 min-w-0">
+                <div className="font-extrabold text-[13.5px] text-ink leading-tight truncate">
                   {order.courier_name || 'Eric N.'}
                 </div>
-                <div className="flex items-center gap-1 text-[11.5px] text-ink-placeholder font-semibold mt-0.5">
+                <div className="flex items-center gap-1.5 text-[11.5px] text-ink-placeholder font-semibold mt-0.5">
                   <Icon name="star" size={11} stroke={0} style={{ fill: 'var(--amber)', color: 'var(--amber)' }} />
-                  4.9 · Moto de livraison
+                  4.9 · Moto de livraison · {routeDistanceKm} km ({dropoffResolved.cityName})
                 </div>
               </div>
-              
-              <a 
+
+              <a
                 href={`tel:${order.courier_phone || '+237678451290'}`}
-                className="w-9.5 h-9.5 rounded-full bg-green-tint text-success flex items-center justify-center cursor-pointer active:scale-90 transition-transform"
+                className="w-9.5 h-9.5 rounded-full bg-green-tint text-success flex items-center justify-center cursor-pointer active:scale-90 transition-transform flex-none"
               >
                 <Icon name="phone" size={18} />
               </a>

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { productPath } from '@/lib/routes';
 import { useCart } from '@/context/cart-context';
 import { MOCK_PRODUCTS, MOCK_SHOPS } from '@/lib/mock-data';
+import { CAMEROON_CITIES, CAMEROON_ZONES } from '@/lib/cameroon-geo';
+import CameroonMap from '@/components/maps/cameroon-map';
 import Icon from '@/components/shared/icon';
 import ProductMini from '@/components/shared/product-mini';
 import ProductCard from '@/components/shared/product-card';
@@ -16,6 +18,7 @@ export default function Home() {
   const router = useRouter();
   const { addToCart } = useCart();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showMapPreview, setShowMapPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const popularProducts = MOCK_PRODUCTS.slice(0, 8);
@@ -83,7 +86,7 @@ export default function Home() {
             <div className="flex items-center justify-between md:block">
               <span className="inline-flex w-fit items-center gap-2 rounded-full bg-brand px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-white shadow-brand">
                 <Icon name="truck" size={14} stroke={2.3} />
-                Livraison RUSH Douala
+                Livraison RUSH Cameroun · Douala & Yaoundé
               </span>
               <Link href="/account" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white md:hidden">
                 <Icon name="user" size={18} stroke={2.2} />
@@ -278,10 +281,59 @@ export default function Home() {
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between px-4 md:px-0">
           <h2 className="text-lg font-black tracking-tight text-ink">Boutiques proches</h2>
-          <button className="flex items-center gap-1 text-[13px] font-bold text-brand">
-            Voir sur la carte <Icon name="pin" size={12} stroke={2} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowMapPreview((v) => !v)}
+              className="flex items-center gap-1 text-[13px] font-bold text-brand cursor-pointer hover:underline"
+            >
+              {showMapPreview ? 'Masquer la carte' : 'Voir sur la carte'} <Icon name="pin" size={12} stroke={2} />
+            </button>
+            <Link href="/carte" className="hidden sm:inline-flex items-center gap-1 text-[12.5px] font-extrabold text-ink-light hover:text-brand">
+              Carte Cameroun <Icon name="chevR" size={12} stroke={2.4} />
+            </Link>
+          </div>
         </div>
+
+        {showMapPreview && (
+          <div className="px-4 md:px-0 animate-scaleUp">
+            <CameroonMap
+              center={[4.0511, 9.712]}
+              zoom={13}
+              heightClassName="h-[340px]"
+              showCitySwitcher
+              showLocateButton
+              markers={[
+                ...MOCK_SHOPS.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number').map((s) => ({
+                  id: `home-shop-${s.id}`,
+                  lat: s.lat!,
+                  lng: s.lng!,
+                  title: s.name,
+                  subtitle: `${s.category} · ${s.quarter || 'Douala'} · ${s.eta_minutes} min`,
+                  badge: s.delivery_fee === 0 ? 'Livraison gratuite' : `${s.delivery_fee} FCFA`,
+                  variant: 'shop' as const,
+                })),
+                ...CAMEROON_CITIES.map((c) => ({
+                  id: `home-city-${c.id}`,
+                  lat: c.lat,
+                  lng: c.lng,
+                  title: c.name,
+                  subtitle: `${c.region} · ${c.etaLabel}`,
+                  variant: 'city' as const,
+                })),
+              ]}
+              circles={CAMEROON_ZONES.slice(0, 12).map((z) => ({
+                id: `home-zone-${z.id}`,
+                lat: z.lat,
+                lng: z.lng,
+                radiusMeters: z.radiusMeters,
+                color: '#F50012',
+              }))}
+              interactiveHint="Basculez entre Douala, Yaoundé et les 10 régions du Cameroun"
+            />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 px-4 md:grid-cols-3 md:px-0">
           {MOCK_SHOPS.slice(0, 3).map((shop) => (
             <ShopCard key={shop.id} s={shop} onOpen={() => router.push('/categories')} />

@@ -6,11 +6,18 @@ import { MOCK_ORDERS, MOCK_SHOPS, MOCK_PRODUCTS } from '@/lib/mock-data';
 import { formatPrice } from '@/lib/utils';
 import Icon from '@/components/shared/icon';
 import { createClient } from '@/lib/supabase/client';
+import CameroonMap from '@/components/maps/cameroon-map';
+import {
+  ACTIVE_CAMEROON_RIDERS,
+  CAMEROON_CITIES,
+  CAMEROON_ZONES,
+  resolveLocationFromText,
+} from '@/lib/cameroon-geo';
 
 export default function AdminPage() {
   const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
   const [shops, setShops] = useState<Shop[]>(MOCK_SHOPS);
-  const [activePanel, setActivePanel] = useState<'orders' | 'couriers' | 'shops'>('orders');
+  const [activePanel, setActivePanel] = useState<'orders' | 'couriers' | 'shops' | 'map'>('orders');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
   // Filters
@@ -284,6 +291,15 @@ export default function AdminPage() {
           <Icon name="bag" size={16} />
           Abonnements Boutiques ({shops.length})
         </button>
+        <button
+          onClick={() => setActivePanel('map')}
+          className={`flex-1 flex items-center justify-center gap-2 h-11 rounded-lg font-black text-[13.5px] cursor-pointer transition-all ${
+            activePanel === 'map' ? 'bg-surface text-ink shadow-warm-1' : 'text-ink-muted hover:text-ink'
+          }`}
+        >
+          <Icon name="pin" size={16} />
+          Carte Cameroun
+        </button>
       </div>
 
       {/* Panel 1 : Simulation des Commandes */}
@@ -536,6 +552,80 @@ export default function AdminPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Panel 4 : Supervision Carte Cameroun */}
+      {activePanel === 'map' && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-black text-lg text-ink">Supervision Opérationnelle · Cameroun</h2>
+              <p className="text-[12.5px] font-semibold text-ink-muted">
+                Commandes actives, boutiques abonnées, zones tarifaires et flotte de Rushers à travers le Cameroun.
+              </p>
+            </div>
+            <span className="badge bg-brand-tint text-brand font-black text-[11.5px] px-3 py-1 rounded-pill">
+              {CAMEROON_CITIES.length} villes · {CAMEROON_ZONES.length} zones
+            </span>
+          </div>
+
+          <CameroonMap
+            center={[4.0511, 9.7279]}
+            zoom={12}
+            heightClassName="h-[460px]"
+            showCitySwitcher
+            showLocateButton
+            markers={[
+              ...CAMEROON_CITIES.map((c) => ({
+                id: `adm-city-${c.id}`,
+                lat: c.lat,
+                lng: c.lng,
+                title: c.name,
+                subtitle: `${c.region} · ${c.activeRiders} Rushers`,
+                variant: 'city' as const,
+              })),
+              ...shops
+                .filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number')
+                .map((s) => ({
+                  id: `adm-shop-${s.id}`,
+                  lat: s.lat!,
+                  lng: s.lng!,
+                  title: s.name,
+                  subtitle: `${s.quarter || 'Douala'} · ${s.subscription_status}`,
+                  badge: 'Boutique',
+                  variant: 'shop' as const,
+                })),
+              ...ACTIVE_CAMEROON_RIDERS.map((r) => ({
+                id: `adm-rider-${r.id}`,
+                lat: r.lat,
+                lng: r.lng,
+                title: `${r.name} (${r.vehicle})`,
+                subtitle: `${r.quarter} · ${r.status === 'available' ? 'Libre' : 'En livraison'}`,
+                variant: 'rider' as const,
+                pulse: r.status === 'delivering',
+              })),
+              ...orders.map((o) => {
+                const loc = resolveLocationFromText(o.delivery_address);
+                return {
+                  id: `adm-order-${o.id}`,
+                  lat: loc.lat,
+                  lng: loc.lng,
+                  title: `Commande ${o.id}`,
+                  subtitle: `${o.delivery_address} · ${formatPrice(o.total_amount)}`,
+                  badge: o.status,
+                  variant: 'customer' as const,
+                };
+              }),
+            ]}
+            circles={CAMEROON_ZONES.map((z) => ({
+              id: `adm-zone-${z.id}`,
+              lat: z.lat,
+              lng: z.lng,
+              radiusMeters: z.radiusMeters,
+              color: '#F50012',
+            }))}
+          />
         </div>
       )}
 

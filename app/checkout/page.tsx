@@ -8,6 +8,12 @@ import { placeOrder } from '@/app/actions/checkout';
 import { PaymentMethod } from '@/types';
 import Icon from '@/components/shared/icon';
 import { MOCK_PRODUCTS } from '@/lib/mock-data';
+import CameroonMap from '@/components/maps/cameroon-map';
+import {
+  CAMEROON_CITIES,
+  CAMEROON_ZONES,
+  findNearestCameroonZone,
+} from '@/lib/cameroon-geo';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -15,12 +21,50 @@ export default function CheckoutPage() {
   const [isPending, setIsPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Formulaire
+  // Formulaire & Géolocalisation Cameroun
+  const [selectedCityId, setSelectedCityId] = useState('douala');
+  const [selectedZoneId, setSelectedZoneId] = useState('dla-akwa');
   const [address, setAddress] = useState('Akwa, Rue Joss');
+  const [pinCoords, setPinCoords] = useState<{ lat: number; lng: number }>({ lat: 4.0536, lng: 9.6989 });
+  const [showMapPicker, setShowMapPicker] = useState(true);
   const [phone, setPhone] = useState('678451290');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mtn');
   const [note, setNote] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
+
+  const cityZones = CAMEROON_ZONES.filter((z) => z.cityId === selectedCityId);
+  const activeZone = CAMEROON_ZONES.find((z) => z.id === selectedZoneId) || cityZones[0] || CAMEROON_ZONES[0];
+
+  const handleCitySelect = (cityId: string) => {
+    setSelectedCityId(cityId);
+    const firstZone = CAMEROON_ZONES.find((z) => z.cityId === cityId);
+    const cityObj = CAMEROON_CITIES.find((c) => c.id === cityId);
+    if (firstZone) {
+      setSelectedZoneId(firstZone.id);
+      setPinCoords({ lat: firstZone.lat, lng: firstZone.lng });
+      setAddress(`${firstZone.name}, ${firstZone.cityName}`);
+    } else if (cityObj) {
+      setPinCoords({ lat: cityObj.lat, lng: cityObj.lng });
+      setAddress(`${cityObj.name}, Centre`);
+    }
+  };
+
+  const handleZoneSelect = (zoneId: string) => {
+    setSelectedZoneId(zoneId);
+    const z = CAMEROON_ZONES.find((item) => item.id === zoneId);
+    if (z) {
+      setPinCoords({ lat: z.lat, lng: z.lng });
+      setAddress(`${z.name}, ${z.landmark.split('·')[0].trim()} (${z.cityName})`);
+    }
+  };
+
+  const handleMapPinClick = (lat: number, lng: number) => {
+    setPinCoords({ lat, lng });
+    const nearest = findNearestCameroonZone(lat, lng);
+    setSelectedCityId(nearest.cityId);
+    setSelectedZoneId(nearest.id);
+    setAddress(`${nearest.name}, ${nearest.cityName} (GPS ${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+  };
 
   // Charger le code promo depuis localStorage
   useEffect(() => {
@@ -119,10 +163,81 @@ export default function CheckoutPage() {
         <div className="flex-1 flex flex-col gap-6 w-full">
           {/* Section 1 : Adresse de livraison */}
           <div className="card bg-surface p-5 rounded-lg shadow-warm-1 flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <span className="w-6 h-6 rounded-full bg-ink text-white flex items-center justify-center font-extrabold text-[12.5px]">1</span>
-              <h2 className="font-black text-base text-ink tracking-tight">Adresse de livraison</h2>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <span className="w-6 h-6 rounded-full bg-ink text-white flex items-center justify-center font-extrabold text-[12.5px]">1</span>
+                <h2 className="font-black text-base text-ink tracking-tight">Adresse de livraison (Cameroun)</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMapPicker((v) => !v)}
+                className="text-[12px] font-black text-brand hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Icon name="pin" size={13} stroke={2.2} />
+                {showMapPicker ? 'Masquer la carte' : 'Choisir sur la carte'}
+              </button>
             </div>
+
+            {/* Sélecteurs Ville & Quartier Cameroun */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-extrabold text-ink-light mb-1.5 ml-1">Ville au Cameroun</label>
+                <select
+                  value={selectedCityId}
+                  onChange={(e) => handleCitySelect(e.target.value)}
+                  className="w-full bg-bg-app-light rounded-md px-3.5 h-11 border border-border-warm font-bold text-[13.5px] text-ink outline-none focus:ring-2 focus:ring-brand"
+                >
+                  {CAMEROON_CITIES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.region})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-extrabold text-ink-light mb-1.5 ml-1">Quartier / Zone</label>
+                <select
+                  value={selectedZoneId}
+                  onChange={(e) => handleZoneSelect(e.target.value)}
+                  className="w-full bg-bg-app-light rounded-md px-3.5 h-11 border border-border-warm font-bold text-[13.5px] text-ink outline-none focus:ring-2 focus:ring-brand"
+                >
+                  {(cityZones.length > 0 ? cityZones : CAMEROON_ZONES).map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name} (~{z.etaMinutes} min · {formatPrice(z.deliveryFee)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {showMapPicker && (
+              <div className="flex flex-col gap-2">
+                <CameroonMap
+                  center={[pinCoords.lat, pinCoords.lng]}
+                  zoom={14}
+                  heightClassName="h-[240px]"
+                  showLocateButton
+                  interactiveHint="Cliquez sur la carte pour placer votre point de livraison"
+                  onMapClick={handleMapPinClick}
+                  markers={[
+                    {
+                      id: 'checkout-pin',
+                      lat: pinCoords.lat,
+                      lng: pinCoords.lng,
+                      title: 'Point de livraison RUSH',
+                      subtitle: address,
+                      badge: `${activeZone.etaMinutes} min`,
+                      variant: 'customer',
+                      pulse: true,
+                    },
+                  ]}
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] font-bold text-ink-muted px-1">
+                  <span>Zone détectée : <strong className="text-ink">{activeZone.cityName} · {activeZone.name}</strong></span>
+                  <span>GPS : {pinCoords.lat.toFixed(4)}, {pinCoords.lng.toFixed(4)}</span>
+                </div>
+              </div>
+            )}
             
             <div className="flex flex-col gap-3">
               <div>

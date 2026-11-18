@@ -5,12 +5,26 @@ import Link from 'next/link';
 import Icon from '@/components/shared/icon';
 import SafeImage from '@/components/shared/safe-image';
 import { formatPrice } from '@/lib/utils';
+import CameroonMap from '@/components/maps/cameroon-map';
+import {
+  CAMEROON_ZONES,
+  calculateDistanceKm,
+  estimateCameroonDelivery,
+  resolveLocationFromText,
+} from '@/lib/cameroon-geo';
 
 export default function DriveB2BPage() {
-  const [pickup, setPickup] = useState('');
-  const [dropoff, setDropoff] = useState('');
+  const [pickup, setPickup] = useState('Douala, Akwa');
+  const [dropoff, setDropoff] = useState('Douala, Bonapriso');
+  const [pickupCoords, setPickupCoords] = useState<[number, number]>([4.0536, 9.6989]);
+  const [dropoffCoords, setDropoffCoords] = useState<[number, number]>([4.0273, 9.7014]);
+  const [activePinMode, setActivePinMode] = useState<'pickup' | 'dropoff'>('dropoff');
   const [isSimulating, setIsSimulating] = useState(false);
-  const [simulatedPrice, setSimulatedPrice] = useState<number | null>(null);
+  const [simulationResult, setSimulationResult] = useState<{
+    distanceKm: number;
+    priceFcfa: number;
+    etaMinutes: number;
+  } | null>(null);
 
   const useCases = [
     { t: "Boutiques Instagram & WhatsApp", d: "Vos clients commandent en DM ou message. Vous saisissez l'adresse sur RUSH Drive, un coursier livre le colis et récupère l'argent si nécessaire." },
@@ -31,13 +45,33 @@ export default function DriveB2BPage() {
     e.preventDefault();
     if (!pickup || !dropoff) return;
     setIsSimulating(true);
+    const pResolved = resolveLocationFromText(pickup);
+    const dResolved = resolveLocationFromText(dropoff);
+    const pPt: [number, number] = [pResolved.lat, pResolved.lng];
+    const dPt: [number, number] = [dResolved.lat, dResolved.lng];
+    setPickupCoords(pPt);
+    setDropoffCoords(dPt);
+
+    const dist = calculateDistanceKm(pPt[0], pPt[1], dPt[0], dPt[1]);
+    const estimate = estimateCameroonDelivery(dist);
     setTimeout(() => {
-      // Simulation d'un prix de course basé sur la zone (entre 600 et 1800 FCFA)
-      const base = 600;
-      const randomExtra = Math.floor(Math.random() * 6) * 200;
-      setSimulatedPrice(base + randomExtra);
+      setSimulationResult(estimate);
       setIsSimulating(false);
-    }, 1200);
+    }, 350);
+  };
+
+  const handleDriveMapClick = (lat: number, lng: number) => {
+    if (activePinMode === 'pickup') {
+      setPickupCoords([lat, lng]);
+      setPickup(`Point GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    } else {
+      setDropoffCoords([lat, lng]);
+      setDropoff(`Point GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    }
+    const nextPickup = activePinMode === 'pickup' ? [lat, lng] : pickupCoords;
+    const nextDropoff = activePinMode === 'dropoff' ? [lat, lng] : dropoffCoords;
+    const dist = calculateDistanceKm(nextPickup[0], nextPickup[1], nextDropoff[0], nextDropoff[1]);
+    setSimulationResult(estimateCameroonDelivery(dist));
   };
 
   return (
@@ -136,59 +170,163 @@ export default function DriveB2BPage() {
         </div>
       </section>
 
-      {/* Pricing Simulator */}
+      {/* Pricing Simulator + Cameroon Route Map */}
       <section id="pricing" className="flex flex-col gap-6 px-4 md:px-0 scroll-mt-6">
         <div className="text-center max-w-xl mx-auto">
-          <h2 className="text-xl md:text-2xl font-black text-ink tracking-tight">Simulez le tarif de votre course</h2>
+          <h2 className="text-xl md:text-2xl font-black text-ink tracking-tight">Simulez votre course sur la carte du Cameroun</h2>
           <p className="text-[13.5px] font-semibold text-ink-light mt-1">
-            Le tarif est calculé de manière transparente en fonction de la distance entre le point de retrait et le point de livraison.
+            Sélectionnez vos points de retrait et d'arrivée ou cliquez directement sur la carte pour calculer la distance réelle (km) et le tarif transparent.
           </p>
         </div>
 
-        <div className="card bg-surface p-5 rounded-[20px] border border-border-warm shadow-warm-1 max-w-lg mx-auto w-full">
-          <form onSubmit={handleSimulateDistance} className="flex flex-col gap-4">
-            <div>
-              <label className="block text-[11.5px] font-extrabold text-ink-light mb-1.5 ml-1">Point de retrait (Départ)</label>
-              <input
-                type="text"
-                required
-                value={pickup}
-                onChange={(e) => setPickup(e.target.value)}
-                placeholder="Ex. Akwa, Boulangerie Zépol"
-                className="w-full bg-bg-app-light border border-border-warm rounded-md px-3.5 h-11 outline-none text-ink font-semibold"
-              />
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-6 items-start">
+          <div className="card bg-surface p-5 rounded-[20px] border border-border-warm shadow-warm-1 w-full">
+            <form onSubmit={handleSimulateDistance} className="flex flex-col gap-4">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivePinMode('pickup')}
+                  className={`flex-1 py-2 px-3 rounded-pill text-[11.5px] font-black border cursor-pointer transition-colors ${
+                    activePinMode === 'pickup'
+                      ? 'bg-info text-white border-info'
+                      : 'bg-bg-app-light text-ink-light border-border-warm'
+                  }`}
+                >
+                  A · Placer le retrait sur la carte
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePinMode('dropoff')}
+                  className={`flex-1 py-2 px-3 rounded-pill text-[11.5px] font-black border cursor-pointer transition-colors ${
+                    activePinMode === 'dropoff'
+                      ? 'bg-brand text-white border-brand'
+                      : 'bg-bg-app-light text-ink-light border-border-warm'
+                  }`}
+                >
+                  B · Placer la livraison sur la carte
+                </button>
+              </div>
 
-            <div>
-              <label className="block text-[11.5px] font-extrabold text-ink-light mb-1.5 ml-1">Point de livraison (Arrivée)</label>
-              <input
-                type="text"
-                required
-                value={dropoff}
-                onChange={(e) => setDropoff(e.target.value)}
-                placeholder="Ex. Bonapriso, Rue des Palmiers"
-                className="w-full bg-bg-app-light border border-border-warm rounded-md px-3.5 h-11 outline-none text-ink font-semibold"
-              />
-            </div>
+              <div>
+                <label className="block text-[11.5px] font-extrabold text-ink-light mb-1.5 ml-1">Point de retrait (Départ A)</label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const z = CAMEROON_ZONES.find((item) => item.id === e.target.value);
+                    if (z) {
+                      setPickup(`${z.cityName}, ${z.name}`);
+                      setPickupCoords([z.lat, z.lng]);
+                    }
+                  }}
+                  className="w-full mb-2 bg-bg-app-light border border-border-warm rounded-md px-3 h-9 text-[12.5px] font-bold text-ink outline-none"
+                >
+                  <option value="">Choisir un quartier rapide (Douala / Yaoundé / ...)</option>
+                  {CAMEROON_ZONES.map((z) => (
+                    <option key={`p-${z.id}`} value={z.id}>
+                      {z.cityName} — {z.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  required
+                  value={pickup}
+                  onChange={(e) => setPickup(e.target.value)}
+                  placeholder="Ex. Akwa, Boulangerie Zépol"
+                  className="w-full bg-bg-app-light border border-border-warm rounded-md px-3.5 h-11 outline-none text-ink font-semibold"
+                />
+              </div>
 
-            <button
-              type="submit"
-              disabled={isSimulating}
-              className="btn btn-primary h-11 bg-info text-white font-extrabold text-[13px] rounded-pill shadow-sm cursor-pointer hover:opacity-90 disabled:opacity-50 mt-2"
-            >
-              {isSimulating ? "Calcul de l'itinéraire..." : "Estimer le prix de la course"}
-            </button>
-          </form>
+              <div>
+                <label className="block text-[11.5px] font-extrabold text-ink-light mb-1.5 ml-1">Point de livraison (Arrivée B)</label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const z = CAMEROON_ZONES.find((item) => item.id === e.target.value);
+                    if (z) {
+                      setDropoff(`${z.cityName}, ${z.name}`);
+                      setDropoffCoords([z.lat, z.lng]);
+                    }
+                  }}
+                  className="w-full mb-2 bg-bg-app-light border border-border-warm rounded-md px-3 h-9 text-[12.5px] font-bold text-ink outline-none"
+                >
+                  <option value="">Choisir un quartier rapide (Douala / Yaoundé / ...)</option>
+                  {CAMEROON_ZONES.map((z) => (
+                    <option key={`d-${z.id}`} value={z.id}>
+                      {z.cityName} — {z.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  required
+                  value={dropoff}
+                  onChange={(e) => setDropoff(e.target.value)}
+                  placeholder="Ex. Bonapriso, Rue des Palmiers"
+                  className="w-full bg-bg-app-light border border-border-warm rounded-md px-3.5 h-11 outline-none text-ink font-semibold"
+                />
+              </div>
 
-          {simulatedPrice !== null && (
-            <div className="mt-5 p-4 rounded-lg bg-green-tint/50 border border-success/10 text-center flex flex-col items-center gap-1 select-none animate-fade-in">
-              <span className="text-[11px] font-black uppercase text-success tracking-wider">Tarif Estimé de la livraison</span>
-              <span className="font-black text-2xl text-success mt-0.5">{formatPrice(simulatedPrice)}</span>
-              <p className="text-[11.5px] text-ink-light font-medium mt-1 leading-snug">
-                Ce prix comprend la récupération de vos colis et la livraison directe à votre client à Douala.
-              </p>
-            </div>
-          )}
+              <button
+                type="submit"
+                disabled={isSimulating}
+                className="btn btn-primary h-11 bg-info text-white font-extrabold text-[13px] rounded-pill shadow-sm cursor-pointer hover:opacity-90 disabled:opacity-50 mt-2"
+              >
+                {isSimulating ? "Calcul de l'itinéraire..." : "Calculer distance & tarif"}
+              </button>
+            </form>
+
+            {simulationResult !== null && (
+              <div className="mt-5 p-4 rounded-lg bg-green-tint/50 border border-success/10 text-center flex flex-col items-center gap-1 select-none fade-in">
+                <span className="text-[11px] font-black uppercase text-success tracking-wider">
+                  Tarif Estimé · {simulationResult.distanceKm} km · ~{simulationResult.etaMinutes} min
+                </span>
+                <span className="font-black text-2xl text-success mt-0.5">{formatPrice(simulationResult.priceFcfa)}</span>
+                <p className="text-[11.5px] text-ink-light font-medium mt-1 leading-snug">
+                  Récupération directe au point A et livraison express au point B par un Rusher vérifié.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <CameroonMap
+            center={pickupCoords}
+            zoom={13}
+            fitMarkers
+            showCitySwitcher
+            heightClassName="h-[390px]"
+            interactiveHint={`Cliquez sur la carte pour placer le point ${activePinMode === 'pickup' ? 'A (Retrait)' : 'B (Livraison)'}`}
+            onMapClick={handleDriveMapClick}
+            markers={[
+              {
+                id: 'drive-pickup',
+                lat: pickupCoords[0],
+                lng: pickupCoords[1],
+                title: 'Retrait (A)',
+                subtitle: pickup,
+                badge: 'Départ',
+                variant: 'pickup',
+              },
+              {
+                id: 'drive-dropoff',
+                lat: dropoffCoords[0],
+                lng: dropoffCoords[1],
+                title: 'Livraison (B)',
+                subtitle: dropoff,
+                badge: 'Arrivée',
+                variant: 'dropoff',
+              },
+            ]}
+            routes={[
+              {
+                id: 'drive-route',
+                points: [pickupCoords, dropoffCoords],
+                color: '#2563EB',
+                dashed: true,
+                weight: 4,
+              },
+            ]}
+          />
         </div>
       </section>
 

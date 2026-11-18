@@ -65,6 +65,10 @@ export interface Shop {
   created_at: string;
   cover_image_url?: string | null;
   logo_url?: string | null;
+  lat?: number;
+  lng?: number;
+  city?: string;
+  quarter?: string;
 }
 
 export interface Category {
@@ -150,6 +154,8 @@ export interface Order {
   shop_name?: string;
   courier_full_name?: string;
   client_full_name?: string;
+  delivery_lat?: number;
+  delivery_lng?: number;
 }
 
 export interface OrderItem {

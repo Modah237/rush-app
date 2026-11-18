@@ -4,6 +4,14 @@ import { placeOrder } from '@/app/actions/checkout';
 import { syncCart, mergeGuestCart } from '@/app/actions/cart';
 import { createSubscriptionPayment } from '@/app/actions/subscription';
 import { MOCK_PRODUCTS, MOCK_SHOPS } from '@/lib/mock-data';
+import {
+  CAMEROON_CITIES,
+  CAMEROON_ZONES,
+  calculateDistanceKm,
+  estimateCameroonDelivery,
+  findNearestCameroonZone,
+} from '@/lib/cameroon-geo';
+import { mapPath } from '@/lib/routes';
 import { OrderStatus, PaymentMethod } from '@/types';
 
 // Mocking Next.js Navigation and Supabase Server SSG helpers
@@ -220,6 +228,32 @@ describe('RUSH Business Hardening Architecture Tests', () => {
     
     expect(getOrderNotFoundTitle()).toBe("Commande introuvable");
     expect(getOrderNotFoundDesc()).toBe("Cette commande n’existe pas ou n’est plus accessible.");
+  });
+
+  test('Maps du Cameroun : couverture nationale, calcul de distance et tarification FCFA', () => {
+    expect(existsSync('app/carte/page.tsx')).toBe(true);
+    expect(existsSync('components/maps/cameroon-map.tsx')).toBe(true);
+    expect(mapPath()).toBe('/carte');
+
+    // Vérifier la couverture des 10 régions du Cameroun
+    const regions = new Set(CAMEROON_CITIES.map((c) => c.region));
+    expect(regions.size).toBe(10);
+    expect(CAMEROON_ZONES.length).toBeGreaterThanOrEqual(20);
+
+    // Distance réelle Akwa -> Bonapriso (~3 km)
+    const dist = calculateDistanceKm(4.0536, 9.6989, 4.0273, 9.7014);
+    expect(dist).toBeGreaterThan(2);
+    expect(dist).toBeLessThan(5);
+
+    // Tarification transparente FCFA
+    const quote = estimateCameroonDelivery(dist);
+    expect(quote.priceFcfa).toBeGreaterThanOrEqual(500);
+    expect(quote.etaMinutes).toBeGreaterThanOrEqual(12);
+
+    // Snap GPS vers un quartier de Yaoundé (Bastos)
+    const bastos = findNearestCameroonZone(3.892, 11.512);
+    expect(bastos.cityName).toBe('Yaoundé');
+    expect(bastos.name).toBe('Bastos');
   });
 });
 

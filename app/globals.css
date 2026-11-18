@@ -210,3 +210,23 @@ button:active, .btn:active, [role="button"]:active {
     transform: none !important;
   }
 }
+
+/* Leaflet Cameroon Map Integration */
+.leaflet-container {
+  font-family: var(--font-sans) !important;
+  z-index: 10 !important;
+}
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 15 !important;
+}
+.rush-map-marker {
+  background: transparent !important;
+  border: none !important;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 14px !important;
+  box-shadow: var(--sh-2) !important;
+  border: 1px solid var(--line-2);
+}
