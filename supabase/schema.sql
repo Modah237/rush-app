@@ -30,7 +30,7 @@ $$;
 
 
 -- Table des profils (liée à auth.users)
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   role user_role not null default 'client',
   full_name text,
@@ -72,7 +72,7 @@ create or replace trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 -- Table des zones de livraison
-create table public.delivery_zones (
+create table if not exists public.delivery_zones (
   id uuid default gen_random_uuid() primary key,
   name text not null unique, -- ex: "Akwa", "Bonapriso", "Bonamoussadi"
   delivery_fee int not null default 700, -- en FCFA
@@ -81,7 +81,7 @@ create table public.delivery_zones (
 );
 
 -- Table des codes promo
-create table public.promo_codes (
+create table if not exists public.promo_codes (
   id uuid default gen_random_uuid() primary key,
   code text not null unique, -- ex: "RUSH25"
   discount_percent int not null check (discount_percent > 0 and discount_percent <= 100),
@@ -94,7 +94,7 @@ create table public.promo_codes (
 );
 
 -- Table des boutiques / vendeurs
-create table public.shops (
+create table if not exists public.shops (
   id uuid default gen_random_uuid() primary key,
   owner_id uuid references public.profiles(id) on delete set null not null,
   name text not null,
@@ -118,7 +118,7 @@ create table public.shops (
 );
 
 -- Table des catégories
-create table public.categories (
+create table if not exists public.categories (
   id uuid default gen_random_uuid() primary key,
   slug text not null unique,
   label text not null,
@@ -130,7 +130,7 @@ create table public.categories (
 );
 
 -- Table des produits
-create table public.products (
+create table if not exists public.products (
   id uuid default gen_random_uuid() primary key,
   shop_id uuid references public.shops(id) on delete cascade not null,
   category_id uuid references public.categories(id) on delete set null,
@@ -148,7 +148,7 @@ create table public.products (
 );
 
 -- Options / Variantes des produits (Taille, Format, etc.)
-create table public.product_variants (
+create table if not exists public.product_variants (
   id uuid default gen_random_uuid() primary key,
   product_id uuid references public.products(id) on delete cascade not null,
   name text not null, -- ex: "Solo", "Duo", "Famille" ou "Standard", "Familial"
@@ -158,7 +158,7 @@ create table public.product_variants (
 );
 
 -- Table des images de produits
-create table public.product_images (
+create table if not exists public.product_images (
   id uuid default gen_random_uuid() primary key,
   product_id uuid references public.products(id) on delete cascade not null,
   image_url text not null,
@@ -166,7 +166,7 @@ create table public.product_images (
 );
 
 -- Table des paniers (Carts)
-create table public.carts (
+create table if not exists public.carts (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade,
   session_id text unique,
@@ -176,7 +176,7 @@ create table public.carts (
 );
 
 -- Éléments du panier
-create table public.cart_items (
+create table if not exists public.cart_items (
   id uuid default gen_random_uuid() primary key,
   cart_id uuid references public.carts(id) on delete cascade not null,
   product_id uuid references public.products(id) on delete cascade not null,
@@ -187,7 +187,7 @@ create table public.cart_items (
 );
 
 -- Table des commandes (Orders)
-create table public.orders (
+create table if not exists public.orders (
   id text primary key, -- ex: "RSH-20512" (format lisible)
   user_id uuid references public.profiles(id) on delete set null,
   shop_id uuid references public.shops(id) on delete set null,
@@ -216,8 +216,17 @@ create table public.orders (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+
+alter table if exists public.orders
+  add column if not exists delivery_lat double precision,
+  add column if not exists delivery_lng double precision,
+  add column if not exists delivery_pin text,
+  add column if not exists tip_amount int not null default 0,
+  add column if not exists scheduled_slot text default 'express',
+  add column if not exists substitution_pref text default 'call';
+
 -- Articles de la commande (instantané au moment de l'achat)
-create table public.order_items (
+create table if not exists public.order_items (
   id uuid default gen_random_uuid() primary key,
   order_id text references public.orders(id) on delete cascade not null,
   product_id uuid references public.products(id) on delete set null,
@@ -229,7 +238,7 @@ create table public.order_items (
 );
 
 -- Table des paiements (Payments)
-create table public.payments (
+create table if not exists public.payments (
   id uuid default gen_random_uuid() primary key,
   order_id text references public.orders(id) on delete cascade not null,
   payment_method payment_method not null,
@@ -242,7 +251,7 @@ create table public.payments (
 );
 
 -- Historique des statuts de la commande (événements pour le live tracking)
-create table public.order_status_events (
+create table if not exists public.order_status_events (
   id uuid default gen_random_uuid() primary key,
   order_id text references public.orders(id) on delete cascade not null,
   status order_status not null,
@@ -271,27 +280,35 @@ alter table public.order_status_events enable row level security;
 -- ========================================================
 
 -- Profiles
+drop policy if exists "Les profils sont visibles par tous les connectés" on public.profiles;
 create policy "Les profils sont visibles par tous les connectés"
   on public.profiles for select to authenticated using (true);
+drop policy if exists "Chaque utilisateur peut modifier son profil" on public.profiles;
 create policy "Chaque utilisateur peut modifier son profil"
   on public.profiles for update to authenticated
   using (auth.uid() = id) with check (auth.uid() = id);
 
 -- Delivery Zones & Categories
+drop policy if exists "Les zones de livraison sont lisibles par tous" on public.delivery_zones;
 create policy "Les zones de livraison sont lisibles par tous"
   on public.delivery_zones for select using (true);
+drop policy if exists "Les catégories sont lisibles par tous" on public.categories;
 create policy "Les catégories sont lisibles par tous"
   on public.categories for select using (true);
 
 -- Shops & Products & Variants & Images
+drop policy if exists "Les boutiques sont visibles par tous" on public.shops;
 create policy "Les boutiques sont visibles par tous"
   on public.shops for select using (true);
+drop policy if exists "Les propriétaires de boutique peuvent modifier leur boutique" on public.shops;
 create policy "Les propriétaires de boutique peuvent modifier leur boutique"
   on public.shops for all to authenticated
   using (owner_id = auth.uid() or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
+drop policy if exists "Les produits sont visibles par tous" on public.products;
 create policy "Les produits sont visibles par tous"
   on public.products for select using (true);
+drop policy if exists "Les vendeurs peuvent gérer les produits de leur boutique" on public.products;
 create policy "Les vendeurs peuvent gérer les produits de leur boutique"
   on public.products for all to authenticated
   using (
@@ -299,8 +316,10 @@ create policy "Les vendeurs peuvent gérer les produits de leur boutique"
     or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
   );
 
+drop policy if exists "Les variantes de produits sont visibles par tous" on public.product_variants;
 create policy "Les variantes de produits sont visibles par tous"
   on public.product_variants for select using (true);
+drop policy if exists "Les vendeurs peuvent gérer les variantes de leurs produits" on public.product_variants;
 create policy "Les vendeurs peuvent gérer les variantes de leurs produits"
   on public.product_variants for all to authenticated
   using (
@@ -309,15 +328,18 @@ create policy "Les vendeurs peuvent gérer les variantes de leurs produits"
   );
 
 -- Carts
+drop policy if exists "Les utilisateurs possèdent leur panier" on public.carts;
 create policy "Les utilisateurs possèdent leur panier"
   on public.carts for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+drop policy if exists "Les utilisateurs possèdent les items de leur panier" on public.cart_items;
 create policy "Les utilisateurs possèdent les items de leur panier"
   on public.cart_items for all to authenticated
   using (exists (select 1 from public.carts where id = cart_id and user_id = auth.uid()));
 
 -- Orders & Order Items
+drop policy if exists "Les clients peuvent lire leurs propres commandes" on public.orders;
 create policy "Les clients peuvent lire leurs propres commandes"
   on public.orders for select to authenticated
   using (
@@ -327,10 +349,12 @@ create policy "Les clients peuvent lire leurs propres commandes"
     or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
   );
 
+drop policy if exists "Les clients peuvent créer des commandes" on public.orders;
 create policy "Les clients peuvent créer des commandes"
   on public.orders for insert to authenticated
   with check (user_id = auth.uid());
 
+drop policy if exists "Les livreurs ou vendeurs peuvent mettre à jour les commandes" on public.orders;
 create policy "Les livreurs ou vendeurs peuvent mettre à jour les commandes"
   on public.orders for update to authenticated
   using (
@@ -339,6 +363,7 @@ create policy "Les livreurs ou vendeurs peuvent mettre à jour les commandes"
     or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
   );
 
+drop policy if exists "Les items de commande sont visibles par les parties prenantes" on public.order_items;
 create policy "Les items de commande sont visibles par les parties prenantes"
   on public.order_items for select to authenticated
   using (
@@ -350,20 +375,24 @@ create policy "Les items de commande sont visibles par les parties prenantes"
     ))
   );
 
+drop policy if exists "Insertion des items de commande par le client" on public.order_items;
 create policy "Insertion des items de commande par le client"
   on public.order_items for insert to authenticated
   with check (exists (select 1 from public.orders where id = order_id and user_id = auth.uid()));
 
 -- Payments
+drop policy if exists "Les clients voient leurs paiements" on public.payments;
 create policy "Les clients voient leurs paiements"
   on public.payments for select to authenticated
   using (exists (select 1 from public.orders where id = order_id and user_id = auth.uid()));
 
 -- Order Status Events
+drop policy if exists "Les jalons de livraison sont visibles par le client" on public.order_status_events;
 create policy "Les jalons de livraison sont visibles par le client"
   on public.order_status_events for select to authenticated
   using (exists (select 1 from public.orders where id = order_id and (user_id = auth.uid() or courier_id = auth.uid() or exists (select 1 from public.shops where id = shop_id and owner_id = auth.uid()))));
 
+drop policy if exists "Les livreurs et admins peuvent insérer des jalons de statut" on public.order_status_events;
 create policy "Les livreurs et admins peuvent insérer des jalons de statut"
   on public.order_status_events for insert to authenticated
   with check (
@@ -375,12 +404,22 @@ create policy "Les livreurs et admins peuvent insérer des jalons de statut"
 -- ========================================================
 
 -- Types Énumérés requis
-create type public.subscription_status_type as enum ('pending', 'active', 'expired', 'cancelled');
-create type public.courier_application_status as enum ('submitted', 'under_review', 'approved', 'rejected');
-create type public.delivery_status as enum ('pending_assignment', 'assigned', 'picked_up', 'in_transit', 'delivered', 'failed', 'cancelled');
+DO $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'subscription_status_type') THEN
+    CREATE TYPE public.subscription_status_type AS ENUM ('pending', 'active', 'expired', 'cancelled');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'courier_application_status') THEN
+    CREATE TYPE public.courier_application_status AS ENUM ('submitted', 'under_review', 'approved', 'rejected');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'delivery_status') THEN
+    CREATE TYPE public.delivery_status AS ENUM ('pending_assignment', 'assigned', 'picked_up', 'in_transit', 'delivered', 'failed', 'cancelled');
+  END IF;
+END
+$;
 
 -- Table des Abonnements Commerçants
-create table public.vendor_subscriptions (
+create table if not exists public.vendor_subscriptions (
   id uuid default gen_random_uuid() primary key,
   vendor_id uuid references public.profiles(id) on delete cascade not null,
   plan_name text not null,
@@ -395,7 +434,7 @@ create table public.vendor_subscriptions (
 );
 
 -- Table des Paiements d'Abonnement
-create table public.subscription_payments (
+create table if not exists public.subscription_payments (
   id uuid default gen_random_uuid() primary key,
   vendor_id uuid references public.profiles(id) on delete cascade not null,
   subscription_id uuid references public.vendor_subscriptions(id) on delete set null,
@@ -408,12 +447,18 @@ create table public.subscription_payments (
 );
 
 -- Ajout de la contrainte foreign key après création
-alter table public.vendor_subscriptions 
-add constraint fk_vendor_subscription_payment 
-foreign key (payment_id) references public.subscription_payments(id) on delete set null;
+DO $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_vendor_subscription_payment') THEN
+    ALTER TABLE public.vendor_subscriptions
+      ADD CONSTRAINT fk_vendor_subscription_payment
+      FOREIGN KEY (payment_id) REFERENCES public.subscription_payments(id) ON DELETE SET NULL;
+  END IF;
+END
+$;
 
 -- Table de Validation Livreur
-create table public.courier_applications (
+create table if not exists public.courier_applications (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null unique,
   identity_document_url text not null,
@@ -430,7 +475,7 @@ create table public.courier_applications (
 );
 
 -- Tables de Suivi des Livraisons
-create table public.deliveries (
+create table if not exists public.deliveries (
   id uuid default gen_random_uuid() primary key,
   order_id text references public.orders(id) on delete cascade not null unique,
   courier_id uuid references public.profiles(id) on delete set null,
@@ -446,7 +491,7 @@ create table public.deliveries (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-create table public.delivery_status_events (
+create table if not exists public.delivery_status_events (
   id uuid default gen_random_uuid() primary key,
   delivery_id uuid references public.deliveries(id) on delete cascade not null,
   status public.delivery_status not null,
@@ -505,6 +550,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists check_vendor_product_activation on public.products;
 create trigger check_vendor_product_activation
   before insert or update on public.products
   for each row execute procedure public.check_vendor_subscription_for_product();
@@ -522,10 +568,12 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists check_courier_delivery_assignment on public.deliveries;
 create trigger check_courier_delivery_assignment
   before insert or update on public.deliveries
   for each row execute procedure public.check_courier_approval_for_assignment();
 
+drop trigger if exists check_courier_order_assignment on public.orders;
 create trigger check_courier_order_assignment
   before insert or update on public.orders
   for each row execute procedure public.check_courier_approval_for_assignment();
@@ -540,33 +588,40 @@ alter table public.delivery_status_events enable row level security;
 -- Politiques RLS (Row Level Security)
 
 -- Vendor Subscriptions
+drop policy if exists "Les commerçants voient leurs propres abonnements" on public.vendor_subscriptions;
 create policy "Les commerçants voient leurs propres abonnements"
   on public.vendor_subscriptions for select to authenticated
   using (vendor_id = auth.uid() or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
+drop policy if exists "Seul l'admin peut modifier les abonnements" on public.vendor_subscriptions;
 create policy "Seul l'admin peut modifier les abonnements"
   on public.vendor_subscriptions for all to authenticated
   using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
 -- Subscription Payments
+drop policy if exists "Les commerçants voient leurs propres paiements d'abonnement" on public.subscription_payments;
 create policy "Les commerçants voient leurs propres paiements d'abonnement"
   on public.subscription_payments for select to authenticated
   using (vendor_id = auth.uid() or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
 -- Courier Applications
+drop policy if exists "Les livreurs voient leur propre candidature" on public.courier_applications;
 create policy "Les livreurs voient leur propre candidature"
   on public.courier_applications for select to authenticated
   using (user_id = auth.uid() or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
+drop policy if exists "Les livreurs peuvent insérer leur candidature" on public.courier_applications;
 create policy "Les livreurs peuvent insérer leur candidature"
   on public.courier_applications for insert to authenticated
   with check (user_id = auth.uid());
 
+drop policy if exists "Seul l'admin peut modifier ou valider les candidatures" on public.courier_applications;
 create policy "Seul l'admin peut modifier ou valider les candidatures"
   on public.courier_applications for update to authenticated
   using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
 -- Deliveries
+drop policy if exists "Les livreurs et admins voient les livraisons" on public.deliveries;
 create policy "Les livreurs et admins voient les livraisons"
   on public.deliveries for select to authenticated
   using (
@@ -575,11 +630,13 @@ create policy "Les livreurs et admins voient les livraisons"
     or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
   );
 
+drop policy if exists "Les admins peuvent tout faire sur les livraisons" on public.deliveries;
 create policy "Les admins peuvent tout faire sur les livraisons"
   on public.deliveries for all to authenticated
   using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
 -- Delivery Status Events
+drop policy if exists "Lecture des jalons de livraison" on public.delivery_status_events;
 create policy "Lecture des jalons de livraison"
   on public.delivery_status_events for select to authenticated
   using (
@@ -590,6 +647,7 @@ create policy "Lecture des jalons de livraison"
     ))
   );
 
+drop policy if exists "Insertion de jalons par le livreur assigné ou admin" on public.delivery_status_events;
 create policy "Insertion de jalons par le livreur assigné ou admin"
   on public.delivery_status_events for insert to authenticated
   with check (
