@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+import { existsSync, readFileSync } from 'node:fs';
 import crypto from 'crypto';
 import { NextRequest } from 'next/server';
 import { createInitialGtaWorld, stepGtaSimulation } from '@/lib/gta-agents';
@@ -125,5 +126,24 @@ describe('RUSH Multi-Agent GTA & Fapshi Test Suite', () => {
     const json = await res.json();
     expect(json.ok).toBe(true);
     expect(json.passedCount).toBe(json.totalCount);
+  });
+
+  test('Durcissement Anti-Intrusion : Grants SQL, Triggers anti-escalade role, Admin Client & Headers HTTP', () => {
+    expect(existsSync('lib/supabase/admin.ts')).toBe(true);
+
+    const schemaSql = readFileSync('supabase/schema.sql', 'utf8');
+    expect(schemaSql).toContain('grant usage on schema public to anon, authenticated, service_role;');
+    expect(schemaSql).toContain('prevent_profile_privilege_escalation');
+    expect(schemaSql).toContain('prevent_order_financial_tampering');
+    expect(schemaSql).not.toContain('DO $\n');
+
+    const migrationSql = readFileSync('supabase/migrations/20261122_phase4_maps_telemetry_storage.sql', 'utf8');
+    expect(migrationSql).toContain('grant all on all tables in schema public to service_role;');
+    expect(migrationSql).toContain('trg_prevent_profile_privilege_escalation');
+    expect(migrationSql).toContain('trg_prevent_order_financial_tampering');
+
+    const nextCfg = readFileSync('next.config.ts', 'utf8');
+    expect(nextCfg).toContain('X-Frame-Options');
+    expect(nextCfg).toContain('X-Content-Type-Options');
   });
 });

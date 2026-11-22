@@ -404,7 +404,7 @@ create policy "Les livreurs et admins peuvent insérer des jalons de statut"
 -- ========================================================
 
 -- Types Énumérés requis
-DO $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'subscription_status_type') THEN
     CREATE TYPE public.subscription_status_type AS ENUM ('pending', 'active', 'expired', 'cancelled');
@@ -416,7 +416,7 @@ BEGIN
     CREATE TYPE public.delivery_status AS ENUM ('pending_assignment', 'assigned', 'picked_up', 'in_transit', 'delivered', 'failed', 'cancelled');
   END IF;
 END
-$;
+$$;
 
 -- Table des Abonnements Commerçants
 create table if not exists public.vendor_subscriptions (
@@ -447,7 +447,7 @@ create table if not exists public.subscription_payments (
 );
 
 -- Ajout de la contrainte foreign key après création
-DO $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_vendor_subscription_payment') THEN
     ALTER TABLE public.vendor_subscriptions
@@ -455,7 +455,7 @@ BEGIN
       FOREIGN KEY (payment_id) REFERENCES public.subscription_payments(id) ON DELETE SET NULL;
   END IF;
 END
-$;
+$$;
 
 -- Table de Validation Livreur
 create table if not exists public.courier_applications (
@@ -727,3 +727,75 @@ drop policy if exists "Upload photos produits commerçants" on storage.objects;
 create policy "Upload photos produits commerçants"
   on storage.objects for insert to authenticated
   with check (bucket_id = 'product-images');
+
+-- ============================================================================
+-- PHASE 5 : DURCISSEMENT ANTI-INTRUSION & GRANTS POSTGREST OBLIGATOIRES
+-- ============================================================================
+
+-- 1. Grants PostgREST (corrige l'erreur 42501 "permission denied for table orders / shops")
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select on all tables in schema public to anon;
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public grant select on tables to anon;
+
+-- 2. Trigger anti-escalade de privilèges sur public.profiles (empêche un client de s'auto-promouvoir admin)
+create or replace function public.prevent_profile_privilege_escalation()
+returns trigger as $$
+declare
+  caller_role text;
+begin
+  caller_role := coalesce(current_setting('request.jwt.claims', true)::jsonb->>'role', '');
+  if caller_role = 'service_role' then
+    return new;
+  end if;
+
+  if (new.role is distinct from old.role or new.courier_verification is distinct from old.courier_verification) then
+    if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
+      raise exception 'Escalade de privilèges interdite : seul un administrateur peut modifier role ou courier_verification.';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_prevent_profile_privilege_escalation on public.profiles;
+create trigger trg_prevent_profile_privilege_escalation
+  before update on public.profiles
+  for each row execute procedure public.prevent_profile_privilege_escalation();
+
+-- 3. Trigger anti-falsification financière sur public.orders lors d'un UPDATE
+create or replace function public.prevent_order_financial_tampering()
+returns trigger as $$
+declare
+  caller_role text;
+begin
+  caller_role := coalesce(current_setting('request.jwt.claims', true)::jsonb->>'role', '');
+  if caller_role = 'service_role' then
+    return new;
+  end if;
+
+  if (
+    new.subtotal is distinct from old.subtotal or
+    new.delivery_fee is distinct from old.delivery_fee or
+    new.discount_amount is distinct from old.discount_amount or
+    new.total_amount is distinct from old.total_amount or
+    new.platform_fee is distinct from old.platform_fee or
+    new.vendor_payout is distinct from old.vendor_payout or
+    new.courier_payout is distinct from old.courier_payout
+  ) then
+    if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
+      raise exception 'Modification financière interdite sur une commande existante.';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_prevent_order_financial_tampering on public.orders;
+create trigger trg_prevent_order_financial_tampering
+  before update on public.orders
+  for each row execute procedure public.prevent_order_financial_tampering();

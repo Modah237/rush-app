@@ -18,6 +18,11 @@ export async function createSubscriptionPayment(vendorId: string): Promise<Subsc
 
   try {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user && user.id !== vendorId) {
+      return { success: false, message: 'Accès non autorisé : identifiant commerçant invalide.' };
+    }
 
     // 1. Récupérer le numéro de téléphone et le profil du commerçant
     const { data: profile, error: profileErr } = await supabase

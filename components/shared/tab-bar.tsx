@@ -26,10 +26,11 @@ export const TabBar: React.FC = () => {
     return pathname.startsWith(href);
   };
 
-  // Cacher la TabBar sur les pages de checkout, de confirmation, ou sur l'espace d'administration
+  // Cacher la TabBar sur les pages de checkout, de confirmation, simulation ou sur l'espace d'administration
   const shouldHide = 
     pathname.startsWith('/checkout') || 
     pathname.startsWith('/admin') ||
+    pathname.startsWith('/simulation') ||
     pathname.startsWith('/merchant') ||
     pathname.startsWith('/courier') ||
     pathname.includes('/confirm');

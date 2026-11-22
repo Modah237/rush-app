@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
 // Token/Secret de Webhook configuré dans le dashboard de Fapshi
 const FAPSHI_WEBHOOK_SECRET = process.env.FAPSHI_WEBHOOK_SECRET || '';
+
+function verifyHmacConstantTime(bodyText: string, signatureHeader: string | null, secret: string): boolean {
+  if (!signatureHeader || !secret) return false;
+  const digest = crypto.createHmac('sha256', secret).update(bodyText).digest('hex');
+  const sigBuf = Buffer.from(signatureHeader.trim(), 'utf8');
+  const digBuf = Buffer.from(digest, 'utf8');
+  if (sigBuf.length !== digBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, digBuf);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,15 +22,13 @@ export async function POST(req: NextRequest) {
     // Récupérer la signature Fapshi depuis les entêtes
     const signature = req.headers.get('x-fapshi-signature');
 
-    // 1. Validation stricte de la signature Fapshi si le secret est configuré
-    if (FAPSHI_WEBHOOK_SECRET) {
-      if (!signature) {
+    // 1. Validation stricte en temps constant (crypto.timingSafeEqual)
+    const requireSignature = Boolean(FAPSHI_WEBHOOK_SECRET) || process.env.NODE_ENV === 'production';
+    if (requireSignature) {
+      if (!FAPSHI_WEBHOOK_SECRET || !signature) {
         return NextResponse.json({ error: 'Signature Fapshi manquante.' }, { status: 401 });
       }
-      const hmac = crypto.createHmac('sha256', FAPSHI_WEBHOOK_SECRET);
-      const digest = hmac.update(bodyText).digest('hex');
-
-      if (digest !== signature) {
+      if (!verifyHmacConstantTime(bodyText, signature, FAPSHI_WEBHOOK_SECRET)) {
         console.error('Signature Fapshi non valide.');
         return NextResponse.json({ error: 'Signature non valide.' }, { status: 401 });
       }
@@ -35,7 +42,7 @@ export async function POST(req: NextRequest) {
     console.log(`Notification Fapshi reçue pour la commande / abonnement : ${externalId} avec le statut : ${status}`);
 
     const isSuccess = String(status).toLowerCase() === 'successful';
-    const supabase = await createClient();
+    const supabase = await createAdminClient();
 
     // 2. Traitement s'il s'agit d'un abonnement commerçant
     if (externalId.startsWith('SUB-')) {

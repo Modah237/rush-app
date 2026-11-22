@@ -13,6 +13,10 @@ export async function syncCart(cart: CartItem[], userId?: string | null, session
 
   try {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (userId && user && user.id !== userId) {
+      return { success: false, message: 'Accès non autorisé : usurpation userId détectée.' };
+    }
     let cartId = null;
 
     // 1. Trouver ou créer le panier
@@ -85,6 +89,10 @@ export async function syncCart(cart: CartItem[], userId?: string | null, session
 export async function mergeGuestCart(sessionId: string, userId: string) {
   try {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && user.id !== userId) {
+      return { success: false, message: 'Accès non autorisé : usurpation userId détectée.' };
+    }
 
     // 1. Récupérer le panier invité
     const { data: guestCart } = await supabase

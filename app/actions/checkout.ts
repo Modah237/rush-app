@@ -1,6 +1,8 @@
 'use server';
 
+import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { CartItem, Order, OrderStatus, PaymentMethod } from '@/types';
 import { MOCK_PRODUCTS, getVariantsForProduct, MOCK_SHOPS } from '@/lib/mock-data';
 import { initiatePayment } from '@/lib/fapshi';
@@ -115,73 +117,76 @@ export async function placeOrder({
   const vendorPayout = subtotal - Math.round(subtotal * platformCommissionRate);
   const courierPayout = deliveryFee - Math.round(deliveryFee * 0.20) + safeTip;
 
-  // 5. Génération d'un ID de commande lisible et code PIN de remise colis
-  const orderId = `RSH-${Math.floor(Math.random() * 90000 + 10000)}`;
-  const deliveryPin = String(Math.floor(1000 + Math.random() * 9000));
+  // 5. Génération cryptographique CSPRNG de l'ID de commande et du code PIN de remise colis
+  const orderId = `RSH-${crypto.randomInt(100000, 999999)}`;
+  const deliveryPin = String(crypto.randomInt(1000, 9999));
   const primaryShopId = cart[0] ? MOCK_PRODUCTS.find((p) => p.id === cart[0].id)?.shop_id ?? null : null;
   const primaryShop = MOCK_SHOPS.find((s) => s.id === primaryShopId);
   const initialStatus: OrderStatus = paymentMethod === 'cash' ? 'confirmed' : 'confirmed';
   const nowIso = new Date().toISOString();
 
-  // 6. Sauvegarde dans Supabase si connecté
+  // 6. Sauvegarde dans Supabase (invités ET utilisateurs connectés) via client admin serveur après recalcul vérifié
+  const isUuid = (val: string | null | undefined): boolean =>
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    const adminDb = await createAdminClient();
+    const dbStatus: OrderStatus = paymentMethod === 'cash' ? 'confirmed' : 'pending';
+    const dbShopId = isUuid(primaryShopId) ? primaryShopId : null;
 
-    if (user) {
-      const dbStatus: OrderStatus = paymentMethod === 'cash' ? 'confirmed' : 'pending';
-      const { error: orderError } = await supabase.from('orders').insert({
-        id: orderId,
-        user_id: user.id,
-        shop_id: primaryShopId,
+    const { error: orderError } = await adminDb.from('orders').insert({
+      id: orderId,
+      user_id: user?.id ?? null,
+      shop_id: dbShopId,
+      status: dbStatus,
+      subtotal,
+      delivery_fee: deliveryFee,
+      discount_amount: discountAmount,
+      total_amount: finalTotal,
+      delivery_address: deliveryAddress,
+      delivery_phone: deliveryPhone,
+      courier_name: null,
+      courier_phone: null,
+      note,
+      platform_commission_rate: platformCommissionRate,
+      platform_fee: platformFee,
+      vendor_payout: vendorPayout,
+      courier_payout: courierPayout,
+    });
+
+    if (orderError) {
+      console.error('Erreur Supabase insertion commande:', orderError);
+    } else {
+      await adminDb.from('order_items').insert(
+        verifiedItems.map((item) => ({
+          order_id: orderId,
+          product_id: isUuid(item.product_id) ? item.product_id : null,
+          product_name: item.product_name,
+          variant_name: item.variant_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price,
+        }))
+      );
+
+      await adminDb.from('order_status_events').insert({
+        order_id: orderId,
         status: dbStatus,
-        subtotal,
-        delivery_fee: deliveryFee,
-        discount_amount: discountAmount,
-        total_amount: finalTotal,
-        delivery_address: deliveryAddress,
-        delivery_phone: deliveryPhone,
-        courier_name: null,
-        courier_phone: null,
-        note,
-        platform_commission_rate: platformCommissionRate,
-        platform_fee: platformFee,
-        vendor_payout: vendorPayout,
-        courier_payout: courierPayout,
+        notes: paymentMethod === 'cash' ? 'Commande payée à la livraison' : 'En attente de paiement mobile money',
       });
 
-      if (orderError) {
-        console.error('Erreur Supabase insertion commande:', orderError);
-      } else {
-        await supabase.from('order_items').insert(
-          verifiedItems.map((item) => ({
-            order_id: orderId,
-            product_id: item.product_id,
-            product_name: item.product_name,
-            variant_name: item.variant_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total_price: item.total_price,
-          }))
-        );
-
-        await supabase.from('order_status_events').insert({
-          order_id: orderId,
-          status: dbStatus,
-          notes: paymentMethod === 'cash' ? 'Commande payée à la livraison' : 'En attente de paiement mobile money',
-        });
-
-        const pickupAddress = primaryShop ? `${primaryShop.name}, Douala` : 'Boutique RUSH';
-        await supabase.from('deliveries').insert({
-          order_id: orderId,
-          courier_id: null,
-          status: 'pending_assignment',
-          pickup_address: pickupAddress,
-          dropoff_address: deliveryAddress,
-          delivery_fee: deliveryFee,
-          courier_payout: courierPayout,
-        });
-      }
+      const pickupAddress = primaryShop ? `${primaryShop.name}, Douala` : 'Boutique RUSH';
+      await adminDb.from('deliveries').insert({
+        order_id: orderId,
+        courier_id: null,
+        status: 'pending_assignment',
+        pickup_address: pickupAddress,
+        dropoff_address: deliveryAddress,
+        delivery_fee: deliveryFee,
+        courier_payout: courierPayout,
+      });
     }
   } catch {
     console.warn('Supabase non disponible ou erreur serveur. Exécution simulée active.');

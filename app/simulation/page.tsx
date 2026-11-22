@@ -232,24 +232,44 @@ export default function GtaSimulationPage() {
         </div>
       </div>
 
-      {/* KPI Simulation */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* KPI Simulation (grille compacte 3×2 sur mobile, 6 colonnes sur desktop) */}
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2.5 md:gap-3">
         {[
-          { label: 'Commandes IA', value: String(world.stats.totalOrders), sub: `${world.stats.deliveredCount} livrées` },
-          { label: 'Volume GMV', value: formatPrice(world.stats.gmvFcfa), sub: 'Transactions simulées' },
-          { label: 'Commissions RUSH', value: formatPrice(world.stats.platformCommissionsFcfa), sub: '10% boutique · 20% livr.' },
-          { label: 'Gains Rushers', value: formatPrice(world.stats.rusherEarningsFcfa), sub: '80% livr. + pourboires' },
-          { label: 'Fapshi Sandbox', value: String(world.stats.fapshiSimulatedCount), sub: 'MoMo / OM simulés' },
+          {
+            label: 'Commandes IA',
+            value: String(world.stats.totalOrders),
+            sub: `${world.stats.deliveredCount} livrées · ${Math.max(0, world.stats.totalOrders - world.stats.deliveredCount)} en cours`,
+          },
+          {
+            label: 'Volume GMV',
+            value: formatPrice(world.stats.gmvFcfa),
+            sub: 'Commandé + livré',
+          },
+          {
+            label: 'Commissions RUSH',
+            value: formatPrice(world.stats.platformCommissionsFcfa),
+            sub: `Sur ${world.stats.deliveredCount} livrées`,
+          },
+          {
+            label: 'Gains Rushers',
+            value: formatPrice(world.stats.rusherEarningsFcfa),
+            sub: '80% livr. + tips',
+          },
+          {
+            label: 'Fapshi Sandbox',
+            value: String(world.stats.fapshiSimulatedCount),
+            sub: 'MoMo / OM simulés',
+          },
           {
             label: 'Défense Chaos',
             value: `${world.stats.chaosBlockedCount}/${world.stats.chaosTotalCount}`,
             sub: 'Attaques bloquées',
           },
         ].map((kpi) => (
-          <div key={kpi.label} className="card bg-surface p-4 rounded-xl border border-border-warm-light shadow-warm-1">
-            <div className="text-[10.5px] font-black uppercase tracking-wider text-ink-muted">{kpi.label}</div>
-            <div className="text-xl font-black text-ink mt-1 leading-tight">{kpi.value}</div>
-            <div className="text-[11px] font-semibold text-ink-placeholder mt-1">{kpi.sub}</div>
+          <div key={kpi.label} className="card bg-surface p-2.5 md:p-4 rounded-xl border border-border-warm-light shadow-warm-1">
+            <div className="text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider text-ink-muted truncate">{kpi.label}</div>
+            <div className="text-[15px] md:text-xl font-black text-ink mt-1 leading-tight truncate">{kpi.value}</div>
+            <div className="text-[10px] md:text-[11px] font-semibold text-ink-placeholder mt-0.5 truncate">{kpi.sub}</div>
           </div>
         ))}
       </div>
@@ -295,10 +315,10 @@ export default function GtaSimulationPage() {
       {/* Carte Live + Journal GTA */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_0.65fr] gap-5 items-start">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-black text-lg text-ink">Carte temps réel des agents (Douala & Yaoundé)</h2>
-            <div className="flex items-center gap-2 text-[11px] font-bold text-ink-muted">
-              <span>Vitesse :</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-black text-base md:text-lg text-ink">Carte temps réel des agents (Douala & Yaoundé)</h2>
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-ink-muted whitespace-nowrap">
+              <span className="whitespace-nowrap">Vitesse :</span>
               {[
                 { label: '1×', ms: 2000 },
                 { label: '2×', ms: 1000 },
