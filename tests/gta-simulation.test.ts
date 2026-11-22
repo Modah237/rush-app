@@ -146,4 +146,33 @@ describe('RUSH Multi-Agent GTA & Fapshi Test Suite', () => {
     expect(nextCfg).toContain('X-Frame-Options');
     expect(nextCfg).toContain('X-Content-Type-Options');
   });
+
+  test('Compilateur Géospatial 3D (OSM -> Voxels/Meshes) : Projection Mercator, Bâtiments et Routes déterministes', () => {
+    const { compileDouala3D, compileYaounde3D, geoToWorld3D, CITY_ORIGINS } = require('@/lib/geospatial-compiler');
+
+    // 1. Projection cartésienne déterministe
+    const origin = CITY_ORIGINS.douala;
+    const p1 = geoToWorld3D({ lat: origin.lat, lng: origin.lng }, origin);
+    expect(p1.x).toBeCloseTo(0, 1);
+    expect(p1.z).toBeCloseTo(0, 1);
+
+    // 2. Compilation de Douala (Akwa / Bd Liberté)
+    const doualaScene = compileDouala3D();
+    expect(doualaScene.cityId).toBe('douala');
+    expect(doualaScene.buildings.length).toBeGreaterThanOrEqual(15);
+    expect(doualaScene.roads.length).toBeGreaterThanOrEqual(4);
+    expect(doualaScene.trees.length).toBeGreaterThan(0);
+    expect(doualaScene.streetLights.length).toBeGreaterThan(0);
+
+    // Vérification présence de repères réels
+    const akwaPalace = doualaScene.buildings.find((b: any) => b.name.includes('Akwa Palace'));
+    expect(akwaPalace).toBeDefined();
+    expect(akwaPalace.category).toBe('landmark');
+
+    // 3. Compilation de Yaoundé (Bastos)
+    const yaoundeScene = compileYaounde3D();
+    expect(yaoundeScene.cityId).toBe('yaounde');
+    expect(yaoundeScene.buildings.length).toBeGreaterThanOrEqual(4);
+    expect(yaoundeScene.roads.length).toBeGreaterThanOrEqual(2);
+  });
 });

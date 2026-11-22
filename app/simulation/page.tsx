@@ -2,8 +2,21 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import Icon from '@/components/shared/icon';
 import CameroonMap, { MapMarker, MapRoute } from '@/components/maps/cameroon-map';
+
+const GtaRealityView3D = dynamic(() => import('@/components/simulation/gta-reality-view-3d'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[460px] md:h-[540px] bg-[#090A0F] rounded-2xl border border-white/10 flex flex-col items-center justify-center gap-3 text-white/80">
+      <div className="w-8 h-8 rounded-full border-2 border-brand border-t-transparent animate-spin" />
+      <span className="font-mono text-[12px] font-bold tracking-wider uppercase text-white/70">
+        Compilation Géospatiale 3D (OSM $\to$ Voxels)...
+      </span>
+    </div>
+  ),
+});
 import {
   GtaLogKind,
   GtaWorldState,
@@ -28,6 +41,7 @@ export default function GtaSimulationPage() {
   const [world, setWorld] = useState<GtaWorldState>(() => createInitialGtaWorld());
   const [isRunning, setIsRunning] = useState(true);
   const [speedMs, setSpeedMs] = useState(1800);
+  const [viewMode, setViewMode] = useState<'3d' | '2d'>('3d');
   const [logFilter, setLogFilter] = useState<GtaLogKind | 'ALL'>('ALL');
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditReport, setAuditReport] = useState<{
@@ -317,39 +331,79 @@ export default function GtaSimulationPage() {
       {/* Carte Live + Journal GTA */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_0.65fr] gap-5 items-start">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-black text-base md:text-lg text-ink">Carte temps réel des agents (Douala & Yaoundé)</h2>
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-ink-muted whitespace-nowrap">
-              <span className="whitespace-nowrap">Vitesse :</span>
-              {[
-                { label: '1×', ms: 2000 },
-                { label: '2×', ms: 1000 },
-                { label: 'Turbo', ms: 550 },
-              ].map((s) => (
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <h2 className="font-black text-base md:text-lg text-ink">
+                {viewMode === '3d' ? 'Vue 3D Reality (GTA Voxel)' : 'Carte 2D OpenStreetMap'}
+              </h2>
+              <span className="text-[10.5px] font-black uppercase px-2 py-0.5 rounded-pill bg-brand-tint text-brand">
+                {viewMode === '3d' ? 'WebGL 60 FPS' : 'OSM Tiles'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Sélecteur Mode 3D vs 2D */}
+              <div className="flex items-center bg-bg-app-light p-1 rounded-pill border border-border-warm-light">
                 <button
-                  key={s.label}
                   type="button"
-                  onClick={() => setSpeedMs(s.ms)}
-                  className={`px-2.5 py-1 rounded-pill cursor-pointer font-black ${
-                    speedMs === s.ms ? 'bg-ink text-white' : 'bg-bg-app-light text-ink-light'
+                  onClick={() => setViewMode('3d')}
+                  className={`px-3 py-1 rounded-pill text-[11px] font-black cursor-pointer transition-all ${
+                    viewMode === '3d' ? 'bg-ink text-white shadow-warm-1' : 'text-ink-light hover:text-ink'
                   }`}
                 >
-                  {s.label}
+                  🎮 3D Reality
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setViewMode('2d')}
+                  className={`px-3 py-1 rounded-pill text-[11px] font-black cursor-pointer transition-all ${
+                    viewMode === '2d' ? 'bg-ink text-white shadow-warm-1' : 'text-ink-light hover:text-ink'
+                  }`}
+                >
+                  🗺️ 2D Carte
+                </button>
+              </div>
+
+              {/* Sélecteur de Vitesse */}
+              <div className="flex items-center gap-1 text-[11px] font-bold text-ink-muted whitespace-nowrap">
+                {[
+                  { label: '1×', ms: 2000 },
+                  { label: '2×', ms: 1000 },
+                  { label: 'Turbo', ms: 550 },
+                ].map((s) => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    onClick={() => setSpeedMs(s.ms)}
+                    className={`px-2.5 py-1 rounded-pill cursor-pointer font-black ${
+                      speedMs === s.ms ? 'bg-brand text-white shadow-brand' : 'bg-bg-app-light text-ink-light'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <CameroonMap
-            center={[4.055, 9.712]}
-            zoom={12}
-            heightClassName="h-[430px]"
-            showCitySwitcher
-            showLayerToggle
-            markers={markers}
-            routes={routes}
-            interactiveHint="Les marqueurs verts sont les Rushers moto en déplacement autonome"
-          />
+          {viewMode === '3d' ? (
+            <GtaRealityView3D
+              actors={world.actors}
+              orders={world.orders}
+              activeCityId="douala"
+            />
+          ) : (
+            <CameroonMap
+              center={[4.055, 9.712]}
+              zoom={12}
+              heightClassName="h-[430px]"
+              showCitySwitcher
+              showLayerToggle
+              markers={markers}
+              routes={routes}
+              interactiveHint="Les marqueurs verts sont les Rushers moto en déplacement autonome"
+            />
+          )}
 
           {/* Grille des acteurs actifs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
