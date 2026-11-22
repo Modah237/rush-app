@@ -33,6 +33,8 @@ export const ICON_PATHS: Record<string, string> = {
   pkg: '<path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="M4 7l8 4 8-4M12 11v10"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
   flame: '<path d="M12 3c1 3-2 4-2 7a2.5 2.5 0 0 0 5 0c0-1-.5-2-.5-2 2 1 3.5 3 3.5 6a6 6 0 1 1-12 0c0-4 4-5 6-11Z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   
   // Category & Product glyphs
   basket: '<path d="M5 9h14l-1.2 9.5a1.5 1.5 0 0 1-1.5 1.3H7.7a1.5 1.5 0 0 1-1.5-1.3L5 9Z"/><path d="M8.5 9 11 3.5M15.5 9 13 3.5M9 12.5v4M15 12.5v4M12 12.5v4"/>',

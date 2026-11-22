@@ -312,12 +312,14 @@ export default function GtaRealityView3D({
 
       if (cameraMode === 'chase' && targetRusherMesh) {
         // Caméra de poursuite Tesla Reality View / GTA 3ème personne
-        const offset = new THREE.Vector3(0, 4.5, -9);
-        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), targetRusherMesh.rotation.y);
-        const desiredCamPos = targetPos.clone().add(offset);
-        camera.position.lerp(desiredCamPos, 0.08);
+        const camOffset = new THREE.Vector3(0, 4.2, -10);
+        camOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), targetRusherMesh.rotation.y);
+        const desiredCamPos = targetPos.clone().add(camOffset);
+        camera.position.lerp(desiredCamPos, 0.1);
 
-        const lookTarget = targetPos.clone().add(new THREE.Vector3(0, 1.8, 4));
+        const lookOffset = new THREE.Vector3(0, 1.6, 5);
+        lookOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), targetRusherMesh.rotation.y);
+        const lookTarget = targetPos.clone().add(lookOffset);
         camera.lookAt(lookTarget);
       } else if (cameraMode === 'drone') {
         // Vue tactique en surplomb
