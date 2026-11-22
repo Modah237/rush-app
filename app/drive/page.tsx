@@ -2,24 +2,38 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Icon from '@/components/shared/icon';
 import SafeImage from '@/components/shared/safe-image';
 import { formatPrice } from '@/lib/utils';
 import CameroonMap from '@/components/maps/cameroon-map';
+import { useRushStore } from '@/context/rush-store-context';
+import { PaymentMethod } from '@/types';
 import {
+  CAMEROON_LANDMARKS,
   CAMEROON_ZONES,
+  PlaceSearchResult,
   calculateDistanceKm,
   estimateCameroonDelivery,
+  fetchRoadRoute,
+  generateDeliveryPin,
   resolveLocationFromText,
 } from '@/lib/cameroon-geo';
 
 export default function DriveB2BPage() {
+  const router = useRouter();
+  const { addLocalOrder, pushToast } = useRushStore();
   const [pickup, setPickup] = useState('Douala, Akwa');
   const [dropoff, setDropoff] = useState('Douala, Bonapriso');
   const [pickupCoords, setPickupCoords] = useState<[number, number]>([4.0536, 9.6989]);
   const [dropoffCoords, setDropoffCoords] = useState<[number, number]>([4.0273, 9.7014]);
   const [activePinMode, setActivePinMode] = useState<'pickup' | 'dropoff'>('dropoff');
   const [isSimulating, setIsSimulating] = useState(false);
+  const [showDispatchForm, setShowDispatchForm] = useState(false);
+  const [senderPhone, setSenderPhone] = useState('678451290');
+  const [recipientPhone, setRecipientPhone] = useState('699445566');
+  const [parcelDesc, setParcelDesc] = useState('Colis e-commerce WhatsApp');
+  const [drivePayment, setDrivePayment] = useState<PaymentMethod>('mtn');
   const [simulationResult, setSimulationResult] = useState<{
     distanceKm: number;
     priceFcfa: number;
@@ -41,7 +55,7 @@ export default function DriveB2BPage() {
     { num: '4', title: 'Suivi live', desc: 'Vous et votre client suivez la progression du livreur en temps réel sur la carte.' }
   ];
 
-  const handleSimulateDistance = (e: React.FormEvent) => {
+  const handleSimulateDistance = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pickup || !dropoff) return;
     setIsSimulating(true);
@@ -52,26 +66,32 @@ export default function DriveB2BPage() {
     setPickupCoords(pPt);
     setDropoffCoords(dPt);
 
-    const dist = calculateDistanceKm(pPt[0], pPt[1], dPt[0], dPt[1]);
-    const estimate = estimateCameroonDelivery(dist);
-    setTimeout(() => {
-      setSimulationResult(estimate);
-      setIsSimulating(false);
-    }, 350);
+    const route = await fetchRoadRoute(pPt, dPt);
+    const estimate = estimateCameroonDelivery(route.distanceKm);
+    setSimulationResult({
+      ...estimate,
+      etaMinutes: route.durationMinutes,
+    });
+    setIsSimulating(false);
   };
 
-  const handleDriveMapClick = (lat: number, lng: number) => {
+  const handleDriveMapClick = async (lat: number, lng: number, customLabel?: string) => {
     if (activePinMode === 'pickup') {
       setPickupCoords([lat, lng]);
-      setPickup(`Point GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+      setPickup(customLabel || `Point GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
     } else {
       setDropoffCoords([lat, lng]);
-      setDropoff(`Point GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+      setDropoff(customLabel || `Point GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
     }
-    const nextPickup = activePinMode === 'pickup' ? [lat, lng] : pickupCoords;
-    const nextDropoff = activePinMode === 'dropoff' ? [lat, lng] : dropoffCoords;
+    const nextPickup: [number, number] = activePinMode === 'pickup' ? [lat, lng] : pickupCoords;
+    const nextDropoff: [number, number] = activePinMode === 'dropoff' ? [lat, lng] : dropoffCoords;
     const dist = calculateDistanceKm(nextPickup[0], nextPickup[1], nextDropoff[0], nextDropoff[1]);
     setSimulationResult(estimateCameroonDelivery(dist));
+    const route = await fetchRoadRoute(nextPickup, nextDropoff);
+    setSimulationResult({
+      ...estimateCameroonDelivery(route.distanceKm),
+      etaMinutes: route.durationMinutes,
+    });
   };
 
   return (
@@ -212,20 +232,36 @@ export default function DriveB2BPage() {
                 <select
                   value=""
                   onChange={(e) => {
-                    const z = CAMEROON_ZONES.find((item) => item.id === e.target.value);
+                    const val = e.target.value;
+                    const z = CAMEROON_ZONES.find((item) => item.id === val);
                     if (z) {
                       setPickup(`${z.cityName}, ${z.name}`);
                       setPickupCoords([z.lat, z.lng]);
+                      return;
+                    }
+                    const lm = CAMEROON_LANDMARKS.find((item) => item.id === val);
+                    if (lm) {
+                      setPickup(`${lm.name}, ${lm.cityName}`);
+                      setPickupCoords([lm.lat, lm.lng]);
                     }
                   }}
                   className="w-full mb-2 bg-bg-app-light border border-border-warm rounded-md px-3 h-9 text-[12.5px] font-bold text-ink outline-none"
                 >
-                  <option value="">Choisir un quartier rapide (Douala / Yaoundé / ...)</option>
-                  {CAMEROON_ZONES.map((z) => (
-                    <option key={`p-${z.id}`} value={z.id}>
-                      {z.cityName} — {z.name}
-                    </option>
-                  ))}
+                  <option value="">Choisir un quartier ou repère Cameroun</option>
+                  <optgroup label="Repères populaires (Carrefours & Centres)">
+                    {CAMEROON_LANDMARKS.map((lm) => (
+                      <option key={`plm-${lm.id}`} value={lm.id}>
+                        {lm.cityName} — {lm.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Quartiers & Zones RUSH">
+                    {CAMEROON_ZONES.map((z) => (
+                      <option key={`p-${z.id}`} value={z.id}>
+                        {z.cityName} — {z.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
                 <input
                   type="text"
@@ -242,20 +278,36 @@ export default function DriveB2BPage() {
                 <select
                   value=""
                   onChange={(e) => {
-                    const z = CAMEROON_ZONES.find((item) => item.id === e.target.value);
+                    const val = e.target.value;
+                    const z = CAMEROON_ZONES.find((item) => item.id === val);
                     if (z) {
                       setDropoff(`${z.cityName}, ${z.name}`);
                       setDropoffCoords([z.lat, z.lng]);
+                      return;
+                    }
+                    const lm = CAMEROON_LANDMARKS.find((item) => item.id === val);
+                    if (lm) {
+                      setDropoff(`${lm.name}, ${lm.cityName}`);
+                      setDropoffCoords([lm.lat, lm.lng]);
                     }
                   }}
                   className="w-full mb-2 bg-bg-app-light border border-border-warm rounded-md px-3 h-9 text-[12.5px] font-bold text-ink outline-none"
                 >
-                  <option value="">Choisir un quartier rapide (Douala / Yaoundé / ...)</option>
-                  {CAMEROON_ZONES.map((z) => (
-                    <option key={`d-${z.id}`} value={z.id}>
-                      {z.cityName} — {z.name}
-                    </option>
-                  ))}
+                  <option value="">Choisir un quartier ou repère Cameroun</option>
+                  <optgroup label="Repères populaires (Carrefours & Centres)">
+                    {CAMEROON_LANDMARKS.map((lm) => (
+                      <option key={`dlm-${lm.id}`} value={lm.id}>
+                        {lm.cityName} — {lm.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Quartiers & Zones RUSH">
+                    {CAMEROON_ZONES.map((z) => (
+                      <option key={`d-${z.id}`} value={z.id}>
+                        {z.cityName} — {z.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
                 <input
                   type="text"
@@ -293,10 +345,14 @@ export default function DriveB2BPage() {
             center={pickupCoords}
             zoom={13}
             fitMarkers
+            useRoadRouting
+            showSearchBar
             showCitySwitcher
-            heightClassName="h-[390px]"
-            interactiveHint={`Cliquez sur la carte pour placer le point ${activePinMode === 'pickup' ? 'A (Retrait)' : 'B (Livraison)'}`}
-            onMapClick={handleDriveMapClick}
+            showLayerToggle
+            heightClassName="h-[430px]"
+            interactiveHint={`Cliquez sur la carte ou cherchez un repère pour placer le point ${activePinMode === 'pickup' ? 'A (Retrait)' : 'B (Livraison)'}`}
+            onMapClick={(lat, lng) => handleDriveMapClick(lat, lng)}
+            onPlaceSelect={(place: PlaceSearchResult) => handleDriveMapClick(place.lat, place.lng, place.label)}
             markers={[
               {
                 id: 'drive-pickup',
@@ -330,17 +386,116 @@ export default function DriveB2BPage() {
         </div>
       </section>
 
-      {/* Bottom CTA */}
-      <section className="text-center py-10 bg-gradient-to-br from-ink to-ink-light text-white rounded-[24px] shadow-warm-2 flex flex-col items-center gap-4.5 mx-4 md:mx-0 px-6">
-        <h2 className="text-2xl md:text-3xl font-black tracking-tight leading-tight">Prêt à expédier avec drive.rush ?</h2>
-        <p className="text-[14.5px] text-white/60 font-semibold max-w-md">Confiez-nous la logistique de votre commerce et concentrez-vous sur vos ventes. Sans frais d'inscription.</p>
-        <button 
-          onClick={() => alert("Service d'inscription aux entreprises bientôt disponible. Contactez notre support.")}
-          className="flex h-12 items-center justify-center gap-2 rounded-pill bg-info text-white font-black text-[13.5px] shadow-[0_4px_12px_rgba(37,99,235,0.25)] hover:opacity-95 active:scale-98 transition-all mt-2"
-        >
-          Créer un compte drive.rush
-          <Icon name="arrowR" size={15} stroke={2.5} />
-        </button>
+      {/* Bottom CTA + Instant B2B Dispatch */}
+      <section className="py-10 bg-gradient-to-br from-ink to-ink-light text-white rounded-[24px] shadow-warm-2 flex flex-col items-center gap-4.5 mx-4 md:mx-0 px-6">
+        <div className="text-center flex flex-col items-center gap-3">
+          <h2 className="text-2xl md:text-3xl font-black tracking-tight leading-tight">Prêt à expédier avec drive.rush ?</h2>
+          <p className="text-[14.5px] text-white/70 font-semibold max-w-md">
+            Commandez immédiatement un Rusher pour récupérer votre colis chez vous et le livrer à votre client.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowDispatchForm((v) => !v)}
+            className="flex h-12 px-6 items-center justify-center gap-2 rounded-pill bg-info text-white font-black text-[13.5px] shadow-[0_4px_12px_rgba(37,99,235,0.25)] hover:opacity-95 active:scale-98 transition-all mt-1 cursor-pointer"
+          >
+            {showDispatchForm ? 'Masquer le formulaire' : 'Commander un coursier B2B maintenant'}
+            <Icon name="arrowR" size={15} stroke={2.5} />
+          </button>
+        </div>
+
+        {showDispatchForm && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const dist = calculateDistanceKm(pickupCoords[0], pickupCoords[1], dropoffCoords[0], dropoffCoords[1]);
+              const est = simulationResult || estimateCameroonDelivery(dist);
+              const drvId = `DRV-${Math.floor(10000 + Math.random() * 89999)}`;
+              const nowIso = new Date().toISOString();
+              addLocalOrder({
+                id: drvId,
+                user_id: null,
+                shop_id: null,
+                courier_id: null,
+                status: 'confirmed',
+                subtotal: 0,
+                delivery_fee: est.priceFcfa,
+                discount_amount: 0,
+                total_amount: est.priceFcfa,
+                delivery_address: dropoff,
+                delivery_phone: `+237${recipientPhone.replace(/\s+/g, '')}`,
+                courier_name: 'Brice T.',
+                courier_phone: '+237 6 99 44 55 66',
+                eta_minutes: est.etaMinutes,
+                note: `Retrait : ${pickup} (Tél expéditeur +237${senderPhone}) · Colis : ${parcelDesc}`,
+                delivery_zone_id: null,
+                promo_code_id: null,
+                created_at: nowIso,
+                updated_at: nowIso,
+                shop_name: `drive.rush · ${pickup}`,
+                delivery_lat: dropoffCoords[0],
+                delivery_lng: dropoffCoords[1],
+                delivery_pin: generateDeliveryPin(drvId),
+                payment_method: drivePayment,
+                items: [{ product_id: 'drive-parcel', name: parcelDesc, qty: 1, unit_price: est.priceFcfa }],
+              });
+              pushToast(`Course B2B ${drvId} dispatchée !`, 'success');
+              router.push(`/orders/${drvId}`);
+            }}
+            className="w-full max-w-xl mt-4 bg-surface text-ink rounded-[20px] p-5 shadow-warm-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left"
+          >
+            <div className="sm:col-span-2 text-[12px] font-black text-info uppercase tracking-wider">
+              Expédition Express : {pickup} → {dropoff} ({formatPrice((simulationResult || estimateCameroonDelivery(calculateDistanceKm(pickupCoords[0], pickupCoords[1], dropoffCoords[0], dropoffCoords[1]))).priceFcfa)})
+            </div>
+            <div>
+              <label className="block text-[11px] font-extrabold text-ink-light mb-1">Tél. Expéditeur (+237)</label>
+              <input
+                type="tel"
+                required
+                value={senderPhone}
+                onChange={(e) => setSenderPhone(e.target.value)}
+                className="w-full bg-bg-app-light border border-border-warm rounded-md px-3 h-10 text-[13px] font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-extrabold text-ink-light mb-1">Tél. Destinataire (+237)</label>
+              <input
+                type="tel"
+                required
+                value={recipientPhone}
+                onChange={(e) => setRecipientPhone(e.target.value)}
+                className="w-full bg-bg-app-light border border-border-warm rounded-md px-3 h-10 text-[13px] font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-extrabold text-ink-light mb-1">Nature du colis</label>
+              <input
+                type="text"
+                required
+                value={parcelDesc}
+                onChange={(e) => setParcelDesc(e.target.value)}
+                className="w-full bg-bg-app-light border border-border-warm rounded-md px-3 h-10 text-[13px] font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-extrabold text-ink-light mb-1">Paiement course</label>
+              <select
+                value={drivePayment}
+                onChange={(e) => setDrivePayment(e.target.value as PaymentMethod)}
+                className="w-full bg-bg-app-light border border-border-warm rounded-md px-3 h-10 text-[13px] font-bold"
+              >
+                <option value="mtn">MTN MoMo</option>
+                <option value="orange">Orange Money</option>
+                <option value="cash">Cash à la livraison</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              className="sm:col-span-2 h-11 rounded-pill bg-info text-white font-black text-[13px] cursor-pointer hover:opacity-95 mt-1"
+            >
+              Confirmer & Suivre le Rusher en direct →
+            </button>
+          </form>
+        )}
       </section>
     </div>
   );

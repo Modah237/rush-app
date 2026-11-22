@@ -9,13 +9,17 @@ import { formatPrice } from '@/lib/utils';
 import Icon from '@/components/shared/icon';
 import EmptyState from '@/components/shared/empty-state';
 import { createClient } from '@/lib/supabase/client';
+import { useRushStore } from '@/context/rush-store-context';
 
 export default function OrdersPage() {
   const router = useRouter();
+  const { getMergedOrders, isHydrated } = useRushStore();
   const [activeTab, setActiveTab] = useState<'cours' | 'hist'>('cours');
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
+  const [dbOrders, setDbOrders] = useState<Order[]>(MOCK_ORDERS);
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+
+  const orders = isHydrated ? getMergedOrders(dbOrders) : dbOrders;
 
   // Charger les commandes Supabase si connecté
   useEffect(() => {
@@ -37,11 +41,11 @@ export default function OrdersPage() {
               ...o,
               shop_name: MOCK_ORDERS.find(mo => mo.shop_id === o.shop_id)?.shop_name || 'Boutique Partenaire',
             }));
-            setOrders(formatted);
+            setDbOrders(formatted);
           }
         }
-      } catch (err) {
-        console.warn('Erreur Supabase. Utilisation des données mockées.');
+      } catch {
+        console.warn('Erreur Supabase. Utilisation des données locales.');
       }
       setIsLoaded(true);
     }
@@ -88,21 +92,26 @@ export default function OrdersPage() {
   };
 
   const getItemsCount = (o: Order) => {
-    // Calcul estimatif des articles par rapport au sous-total
+    if (o.items && o.items.length > 0) {
+      return o.items.reduce((acc, it) => acc + it.qty, 0);
+    }
     return Math.max(1, Math.round(o.subtotal / 3500));
   };
 
   const getPaymentLabel = (o: Order) => {
+    if (o.payment_method === 'orange') return 'Orange Money';
+    if (o.payment_method === 'cash') return 'Cash à la livraison';
+    if (o.payment_method === 'mtn') return 'MTN MoMo';
     if (o.id === 'RSH-20492') return 'MTN MoMo';
     if (o.id === 'RSH-20410') return 'Orange Money';
-    return 'MTN MoMo'; // Valeur par défaut cohérente
+    return 'MTN MoMo';
   };
 
   const handleRetry = () => {
     setLoadError(false);
     setIsLoaded(false);
     setTimeout(() => {
-      setOrders(MOCK_ORDERS);
+      setDbOrders(MOCK_ORDERS);
       setIsLoaded(true);
     }, 850);
   };

@@ -6,6 +6,9 @@ export async function middleware(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    if (request.nextUrl.pathname.startsWith('/admin') && process.env.ALLOW_DEMO_ADMIN !== '1') {
+      return NextResponse.redirect(new URL('/account', request.url));
+    }
     console.warn("Supabase credentials manquants dans le middleware. Requête passée par défaut.");
     return NextResponse.next({
       request,

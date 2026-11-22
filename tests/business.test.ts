@@ -6,12 +6,17 @@ import { createSubscriptionPayment } from '@/app/actions/subscription';
 import { MOCK_PRODUCTS, MOCK_SHOPS } from '@/lib/mock-data';
 import {
   CAMEROON_CITIES,
+  CAMEROON_LANDMARKS,
   CAMEROON_ZONES,
   calculateDistanceKm,
   estimateCameroonDelivery,
   findNearestCameroonZone,
+  generateDeliveryPin,
+  searchCameroonPlaces,
 } from '@/lib/cameroon-geo';
-import { mapPath } from '@/lib/routes';
+import { mapPath, shopPath } from '@/lib/routes';
+import { evaluatePromoCode, RUSH_PROMOS } from '@/lib/promos';
+import { normalizeCameroonPhone, verifyPhoneOtp } from '@/lib/auth';
 import { OrderStatus, PaymentMethod } from '@/types';
 
 // Mocking Next.js Navigation and Supabase Server SSG helpers
@@ -254,6 +259,171 @@ describe('RUSH Business Hardening Architecture Tests', () => {
     const bastos = findNearestCameroonZone(3.892, 11.512);
     expect(bastos.cityName).toBe('Yaoundé');
     expect(bastos.name).toBe('Bastos');
+
+    // Repères camerounais & recherche locale de carrefours
+    expect(CAMEROON_LANDMARKS.length).toBeGreaterThanOrEqual(15);
+    const pin = generateDeliveryPin('RSH-20492');
+    expect(pin).toMatch(/^\d{4}$/);
+  });
+
+  test('Recherche de repères camerounais & tarification serveur par zone', async () => {
+    const matches = await searchCameroonPlaces('Deido', false);
+    expect(matches.length).toBeGreaterThan(0);
+    expect(matches.some((m) => m.label.toLowerCase().includes('deido'))).toBe(true);
+
+    // Vérifier la tarification serveur sur la zone Bonamoussadi (800 FCFA < 10 000 FCFA)
+    const res = await placeOrder({
+      cart: [
+        {
+          key: 'p1',
+          id: 'p1',
+          variant_id: null,
+          name: 'Bananes plantain mûres',
+          sub: 'Régime ~1,5 kg',
+          glyph: 'plantain',
+          cat: 'fruits',
+          unit: 1500,
+          qty: 2,
+          optName: null,
+        },
+      ],
+      promoCode: null,
+      paymentMethod: 'cash',
+      deliveryAddress: 'Bonamoussadi, Douala',
+      deliveryPhone: '+237678451290',
+      deliveryZoneId: 'dla-bonamoussadi',
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.orderSummary?.delivery_fee).toBe(800);
+    expect(res.orderSummary?.total_amount).toBe(3800);
+  });
+
+  test('Moteur unifié de codes promos : RUSH25, BIENVENUE, MOMO500, ORANGEDG', () => {
+    expect(RUSH_PROMOS.length).toBeGreaterThanOrEqual(4);
+
+    // RUSH25: 25% de réduction sans minimum
+    const r25 = evaluatePromoCode('rush25', 4000);
+    expect(r25.valid).toBe(true);
+    expect(r25.discountAmount).toBe(1000);
+
+    // BIENVENUE: livraison offerte dès 3000 FCFA
+    const bLow = evaluatePromoCode('BIENVENUE', 2000);
+    expect(bLow.valid).toBe(false);
+    const bOk = evaluatePromoCode('BIENVENUE', 3500);
+    expect(bOk.valid).toBe(true);
+    expect(bOk.freeDelivery).toBe(true);
+
+    // MOMO500: réservé à MTN MoMo et min 5000 FCFA
+    const mOrange = evaluatePromoCode('MOMO500', 6000, 'orange');
+    expect(mOrange.valid).toBe(false);
+    const mMtn = evaluatePromoCode('MOMO500', 6000, 'mtn');
+    expect(mMtn.valid).toBe(true);
+    expect(mMtn.discountAmount).toBe(500);
+  });
+
+  test('Checkout serveur calcule les frais par zone Cameroun et génère orderSummary complet', async () => {
+    const product = MOCK_PRODUCTS.find((p) => p.id === 'p1')!; // 1500 FCFA
+    const res = await placeOrder({
+      cart: [
+        {
+          key: 'p1',
+          id: 'p1',
+          variant_id: null,
+          name: product.name,
+          sub: product.sub,
+          glyph: product.glyph,
+          cat: 'fruits',
+          unit: 1500,
+          qty: 2, // 3000 FCFA
+          optName: null,
+        },
+      ],
+      promoCode: 'BIENVENUE',
+      paymentMethod: 'cash',
+      deliveryAddress: 'Santa Lucia, Bonamoussadi',
+      deliveryPhone: '+237678451290',
+      deliveryZoneId: 'dla-bonamoussadi',
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.orderSummary).toBeDefined();
+    expect(res.orderSummary?.subtotal).toBe(3000);
+    expect(res.orderSummary?.delivery_fee).toBe(0); // BIENVENUE offre la livraison
+    expect(res.orderSummary?.total_amount).toBe(3000);
+    expect(res.orderSummary?.delivery_pin?.length).toBe(4);
+    expect(res.orderSummary?.items?.length).toBe(1);
+  });
+
+  test('PWA, Service Worker, Health API et Store global existent', () => {
+    expect(existsSync('app/manifest.ts')).toBe(true);
+    expect(existsSync('public/sw.js')).toBe(true);
+    expect(existsSync('app/api/health/route.ts')).toBe(true);
+    expect(existsSync('context/rush-store-context.tsx')).toBe(true);
+    expect(existsSync('lib/promos.ts')).toBe(true);
+    expect(existsSync('app/shops/[id]/page.tsx')).toBe(true);
+    expect(shopPath('s1')).toBe('/shops/s1');
+  });
+
+  test('Pourboire Rusher plafonné côté serveur, créneau programmé et préférence de substitution', async () => {
+    const res = await placeOrder({
+      cart: [
+        {
+          key: 'p1',
+          id: 'p1',
+          variant_id: null,
+          name: 'Bananes plantain mûres',
+          sub: 'Régime ~1,5 kg',
+          glyph: 'plantain',
+          cat: 'fruits',
+          unit: 1500,
+          qty: 2, // 3000 FCFA
+          optName: null,
+        },
+      ],
+      promoCode: null,
+      paymentMethod: 'cash',
+      deliveryAddress: 'Akwa, Rue Joss',
+      deliveryPhone: '+237678451290',
+      deliveryZoneId: 'dla-akwa', // 500 FCFA
+      tipAmount: 999999, // Tentative de dépassement -> plafonné à 5000 FCFA
+      scheduledSlot: 'today-18h',
+      substitutionPref: 'replace',
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.orderSummary?.tip_amount).toBe(5000);
+    expect(res.orderSummary?.total_amount).toBe(3000 + 500 + 5000);
+    expect(res.orderSummary?.scheduled_slot).toBe('today-18h');
+    expect(res.orderSummary?.substitution_pref).toBe('replace');
+  });
+
+  test('Auth OTP Cameroun, Télémétrie GPS, Storage & Web Push existent et valident les opérateurs', async () => {
+    expect(existsSync('app/login/page.tsx')).toBe(true);
+    expect(existsSync('app/register/page.tsx')).toBe(true);
+    expect(existsSync('lib/auth.ts')).toBe(true);
+    expect(existsSync('lib/telemetry.ts')).toBe(true);
+    expect(existsSync('lib/storage.ts')).toBe(true);
+    expect(existsSync('lib/push.ts')).toBe(true);
+
+    const mtn = normalizeCameroonPhone('+237 678 45 12 90');
+    expect(mtn.valid).toBe(true);
+    expect(mtn.operator).toBe('MTN');
+    expect(mtn.e164).toBe('+237678451290');
+
+    const orange = normalizeCameroonPhone('699445566');
+    expect(orange.valid).toBe(true);
+    expect(orange.operator).toBe('Orange');
+
+    const bad = normalizeCameroonPhone('12345');
+    expect(bad.valid).toBe(false);
+
+    const badOtp = await verifyPhoneOtp('678451290', '000000');
+    expect(badOtp.success).toBe(false);
+
+    const okOtp = await verifyPhoneOtp('678451290', '123456', { fullName: 'Modah Test', role: 'client' });
+    expect(okOtp.success).toBe(true);
+    expect(okOtp.user?.phone).toBe('+237678451290');
   });
 });
 

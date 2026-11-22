@@ -63,6 +63,11 @@ export const Footer: React.FC = () => {
                   Commandes
                 </Link>
               </li>
+              <li>
+                <Link href="/simulation" className="text-[13.5px] font-semibold text-white/62 transition-colors hover:text-brand">
+                  Simulation Agents GTA
+                </Link>
+              </li>
             </ul>
           </div>
 

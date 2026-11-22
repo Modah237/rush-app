@@ -21,3 +21,7 @@ export function drivePath(): string {
 export function mapPath(): string {
   return `/carte`;
 }
+
+export function shopPath(id: string): string {
+  return `/shops/${id}`;
+}

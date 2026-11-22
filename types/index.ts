@@ -156,6 +156,73 @@ export interface Order {
   client_full_name?: string;
   delivery_lat?: number;
   delivery_lng?: number;
+  delivery_city?: string;
+  delivery_zone?: string;
+  delivery_pin?: string;
+  tip_amount?: number;
+  scheduled_slot?: string;
+  substitution_pref?: 'call' | 'replace' | 'refund';
+  payment_method?: PaymentMethod;
+  promo_code?: string | null;
+  items?: {
+    product_id: string;
+    name: string;
+    qty: number;
+    unit_price: number;
+    variant_name?: string | null;
+  }[];
+  timeline?: {
+    status: OrderStatus;
+    label: string;
+    note: string;
+    at: string;
+  }[];
+}
+
+export interface SavedAddress {
+  id: string;
+  label: string;
+  cityId: string;
+  zoneId: string;
+  address: string;
+  lat: number;
+  lng: number;
+  isDefault?: boolean;
+}
+
+export interface OrderReview {
+  orderId: string;
+  rating: number;
+  tags: string[];
+  comment: string;
+  createdAt: string;
+}
+
+export interface RushNotification {
+  id: string;
+  title: string;
+  message: string;
+  kind: 'order' | 'promo' | 'system';
+  href?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export type AnalyticsEventName =
+  | 'product_view'
+  | 'add_to_cart'
+  | 'search'
+  | 'checkout_start'
+  | 'order_placed'
+  | 'promo_applied';
+
+export interface RushAnalyticsEvent {
+  id: string;
+  event: AnalyticsEventName;
+  label: string;
+  value?: number;
+  meta?: Record<string, string | number>;
+  at: string;
 }
 
 export interface OrderItem {

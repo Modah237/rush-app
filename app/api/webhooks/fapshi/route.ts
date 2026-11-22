@@ -13,33 +13,28 @@ export async function POST(req: NextRequest) {
     // Récupérer la signature Fapshi depuis les entêtes
     const signature = req.headers.get('x-fapshi-signature');
 
-    // 1. Validation de la signature Fapshi si configurée (Sécurité de production)
-    if (FAPSHI_WEBHOOK_SECRET && signature) {
+    // 1. Validation stricte de la signature Fapshi si le secret est configuré
+    if (FAPSHI_WEBHOOK_SECRET) {
+      if (!signature) {
+        return NextResponse.json({ error: 'Signature Fapshi manquante.' }, { status: 401 });
+      }
       const hmac = crypto.createHmac('sha256', FAPSHI_WEBHOOK_SECRET);
       const digest = hmac.update(bodyText).digest('hex');
-      
+
       if (digest !== signature) {
         console.error('Signature Fapshi non valide.');
         return NextResponse.json({ error: 'Signature non valide.' }, { status: 401 });
       }
     }
 
-    // Le corps attendu de Fapshi :
-    // {
-    //   "amount": 12300,
-    //   "externalId": "RSH-20512",
-    //   "status": "successful" | "failed",
-    //   "transId": "FAP-12345",
-    //   "phone": "678451290"
-    // }
-    const { amount, externalId, status, transId, phone } = body;
+    const { amount, externalId, status, transId } = body;
 
     if (!externalId || !status || !transId) {
       return NextResponse.json({ error: 'Champs obligatoires manquants.' }, { status: 400 });
     }
     console.log(`Notification Fapshi reçue pour la commande / abonnement : ${externalId} avec le statut : ${status}`);
 
-    const isSuccess = status === 'successful';
+    const isSuccess = String(status).toLowerCase() === 'successful';
     const supabase = await createClient();
 
     // 2. Traitement s'il s'agit d'un abonnement commerçant

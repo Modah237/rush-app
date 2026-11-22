@@ -5,6 +5,7 @@ import { Shop } from '@/types';
 import SafeImage from './safe-image';
 import Icon from './icon';
 import { formatPrice } from '@/lib/utils';
+import { useOptionalRushStore } from '@/context/rush-store-context';
 
 interface ShopCardProps {
   s: Shop;
@@ -12,6 +13,9 @@ interface ShopCardProps {
 }
 
 export const ShopCard: React.FC<ShopCardProps> = ({ s, onOpen }) => {
+  const rushStore = useOptionalRushStore();
+  const isFav = rushStore?.isFavoriteShop(s.id) ?? false;
+
   const handleCardClick = () => {
     if (onOpen) onOpen(s);
   };
@@ -54,12 +58,22 @@ export const ShopCard: React.FC<ShopCardProps> = ({ s, onOpen }) => {
 
         {/* Bouton de favori */}
         <button 
-          className="absolute bottom-2.5 right-2.5 z-20 w-8 h-8 rounded-full bg-surface shadow-warm-1 flex items-center justify-center text-ink hover:text-brand transition-all active:scale-90"
+          type="button"
+          className="absolute bottom-2.5 right-2.5 z-20 w-8 h-8 rounded-full bg-surface shadow-warm-1 flex items-center justify-center text-ink hover:text-brand transition-all active:scale-90 cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
+            rushStore?.toggleFavoriteShop(s.id, s.name);
           }}
+          aria-label={`Favori ${s.name}`}
         >
-          <Icon name="heart" size={16} />
+          <Icon
+            name="heart"
+            size={16}
+            style={{
+              fill: isFav ? 'var(--red)' : 'none',
+              color: isFav ? 'var(--red)' : 'var(--ink)',
+            }}
+          />
         </button>
       </div>
 

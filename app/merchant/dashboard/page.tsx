@@ -1,23 +1,25 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { MOCK_PRODUCTS, MOCK_SHOPS, MOCK_ORDERS } from '@/lib/mock-data';
-import { Product, Order, OrderStatus } from '@/types';
+import React, { useState, useEffect, useRef } from 'react';
+import { MOCK_PRODUCTS, MOCK_SHOPS } from '@/lib/mock-data';
+import { Product, OrderStatus } from '@/types';
 import { formatPrice } from '@/lib/utils';
 import Icon from '@/components/shared/icon';
 import SafeImage from '@/components/shared/safe-image';
 import { createClient } from '@/lib/supabase/client';
 import { createSubscriptionPayment } from '@/app/actions/subscription';
+import { useRushStore } from '@/context/rush-store-context';
+import { uploadRushFile } from '@/lib/storage';
 import Link from 'next/link';
 
 export default function MerchantDashboardPage() {
+  const { customProducts, addCustomProduct, getMergedOrders, updateOrderStatus, pushToast } = useRushStore();
   const shop = MOCK_SHOPS[0]; // Mahima Supermarché par défaut pour la démo
-  const [products, setProducts] = useState<Product[]>(
+  const [localProducts, setLocalProducts] = useState<Product[]>(
     MOCK_PRODUCTS.filter((p) => p.shop_id === shop.id)
   );
-  const [orders, setOrders] = useState<Order[]>(
-    MOCK_ORDERS.filter((o) => o.shop_id === shop.id)
-  );
+  const products = [...customProducts.filter((p) => p.shop_id === shop.id), ...localProducts];
+  const orders = getMergedOrders().filter((o) => o.shop_id === shop.id);
 
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'subscription'>('products');
   const [isSubscribed, setIsSubscribed] = useState(shop.subscription_status === 'active');
@@ -77,12 +79,29 @@ export default function MerchantDashboardPage() {
     }
   }, []);
 
-  // Formulaire d'ajout produit
+  // Formulaire d'ajout produit + Upload photo Supabase Storage
   const [newProductName, setNewProductName] = useState('');
   const [newProductPrice, setNewProductPrice] = useState('');
   const [newProductSub, setNewProductSub] = useState('');
   const [newProductCategory, setNewProductCategory] = useState('epicerie');
+  const [newProductImageUrl, setNewProductImageUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    const res = await uploadRushFile(file, 'product-images', shop.id);
+    setUploadingPhoto(false);
+    if (!res.success) {
+      pushToast(res.message || 'Erreur lors de l’envoi de la photo', 'error');
+      return;
+    }
+    setNewProductImageUrl(res.url);
+    pushToast(res.message || 'Photo prête', 'success');
+  };
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,21 +122,24 @@ export default function MerchantDashboardPage() {
       stock: 10,
       is_active: true,
       created_at: new Date().toISOString(),
+      image_url: newProductImageUrl,
       shop_name: shop.name,
       category_slug: newProductCategory,
     };
 
-    setProducts([newProd, ...products]);
+    addCustomProduct(newProd);
+    setLocalProducts((prev) => [newProd, ...prev]);
+    pushToast(`Produit "${newProd.name}" publié dans le catalogue RUSH`, 'success');
     setNewProductName('');
     setNewProductPrice('');
     setNewProductSub('');
+    setNewProductImageUrl(null);
     setShowAddForm(false);
   };
 
   const handleUpdateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status } : o))
-    );
+    updateOrderStatus(orderId, status, `Mis à jour par le commerçant : ${status}`);
+    pushToast(`Commande ${orderId} → ${status}`, 'info');
   };
 
   const handlePaySubscription = async () => {
@@ -266,6 +288,35 @@ export default function MerchantDashboardPage() {
                     <option value="resto">Restaurant</option>
                     <option value="maison">Maison & Soins</option>
                   </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11.5px] font-extrabold text-ink-light mb-1">
+                  Photo produit (Supabase Storage / Local)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingPhoto}
+                    onClick={() => photoInputRef.current?.click()}
+                    className="h-9.5 px-4 rounded-pill bg-bg-app-light border border-border-warm text-[12px] font-extrabold text-ink hover:border-brand cursor-pointer disabled:opacity-50"
+                  >
+                    {uploadingPhoto ? 'Téléversement...' : newProductImageUrl ? 'Changer la photo' : 'Importer une image'}
+                  </button>
+                  {newProductImageUrl && (
+                    <img
+                      src={newProductImageUrl}
+                      alt="Aperçu produit"
+                      className="w-11 h-11 rounded-md object-cover border border-border-warm"
+                    />
+                  )}
                 </div>
               </div>
               <div className="flex gap-2 justify-end mt-2">

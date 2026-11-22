@@ -5,7 +5,9 @@ import { Order, OrderStatus, CourierVerificationStatus, Shop } from '@/types';
 import { MOCK_ORDERS, MOCK_SHOPS, MOCK_PRODUCTS } from '@/lib/mock-data';
 import { formatPrice } from '@/lib/utils';
 import Icon from '@/components/shared/icon';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { useRushStore } from '@/context/rush-store-context';
 import CameroonMap from '@/components/maps/cameroon-map';
 import {
   ACTIVE_CAMEROON_RIDERS,
@@ -15,10 +17,13 @@ import {
 } from '@/lib/cameroon-geo';
 
 export default function AdminPage() {
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
+  const { getMergedOrders, updateOrderStatus, analyticsEvents, isHydrated } = useRushStore();
+  const [dbOrders, setDbOrders] = useState<Order[]>(MOCK_ORDERS);
   const [shops, setShops] = useState<Shop[]>(MOCK_SHOPS);
-  const [activePanel, setActivePanel] = useState<'orders' | 'couriers' | 'shops' | 'map'>('orders');
+  const [activePanel, setActivePanel] = useState<'orders' | 'couriers' | 'shops' | 'map' | 'analytics'>('orders');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+
+  const orders = isHydrated ? getMergedOrders(dbOrders) : dbOrders;
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,7 +59,7 @@ export default function AdminPage() {
             ...o,
             shop_name: MOCK_SHOPS.find(s => s.id === o.shop_id)?.name || 'Boutique Partenaire',
           }));
-          setOrders(formatted);
+          setDbOrders(formatted);
           setDbMode('live');
         }
 
@@ -99,8 +104,9 @@ export default function AdminPage() {
       triggerToast(`[Simulé] Commande ${orderId} passée à : ${getStatusLabel(nextStatus)}`);
     }
 
-    // Always update local state
-    setOrders((prev) =>
+    // Always update global & local state
+    updateOrderStatus(orderId, nextStatus, `Statut mis à jour par l'administrateur : ${getStatusLabel(nextStatus)}`);
+    setDbOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
     );
     
@@ -202,12 +208,21 @@ export default function AdminPage() {
           </p>
         </div>
 
-        {/* DB Sync Indicator */}
-        <div className="flex items-center gap-2 self-start md:self-auto bg-surface px-3 py-1.5 rounded-pill border border-border-warm-light shadow-warm-1 text-[11px] font-black">
-          <span className={`w-2.5 h-2.5 rounded-full ${dbMode === 'live' ? 'bg-success animate-pulse' : 'bg-[#E2730B]'}`} />
-          <span className={dbMode === 'live' ? 'text-success' : 'text-[#E2730B]'}>
-            {dbMode === 'live' ? 'Synchro Supabase Active' : 'Mode Simulation Local'}
-          </span>
+        {/* DB Sync Indicator + Arène GTA */}
+        <div className="flex flex-wrap items-center gap-2.5 self-start md:self-auto">
+          <Link
+            href="/simulation"
+            className="bg-ink text-white hover:bg-brand transition-colors px-3.5 py-1.5 rounded-pill text-[11.5px] font-black shadow-warm-1 flex items-center gap-1.5"
+          >
+            <Icon name="spark" size={13} />
+            Arène Agents GTA
+          </Link>
+          <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-pill border border-border-warm-light shadow-warm-1 text-[11px] font-black">
+            <span className={`w-2.5 h-2.5 rounded-full ${dbMode === 'live' ? 'bg-success animate-pulse' : 'bg-[#E2730B]'}`} />
+            <span className={dbMode === 'live' ? 'text-success' : 'text-[#E2730B]'}>
+              {dbMode === 'live' ? 'Synchro Supabase Active' : 'Mode Simulation Local'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -299,6 +314,15 @@ export default function AdminPage() {
         >
           <Icon name="pin" size={16} />
           Carte Cameroun
+        </button>
+        <button
+          onClick={() => setActivePanel('analytics')}
+          className={`flex-1 flex items-center justify-center gap-2 h-11 rounded-lg font-black text-[13.5px] cursor-pointer transition-all ${
+            activePanel === 'analytics' ? 'bg-surface text-ink shadow-warm-1' : 'text-ink-muted hover:text-ink'
+          }`}
+        >
+          <Icon name="spark" size={16} />
+          Analytics & Export
         </button>
       </div>
 
@@ -628,6 +652,133 @@ export default function AdminPage() {
           />
         </div>
       )}
+
+      {/* Panel 5 : Analytics & Export CSV */}
+      {activePanel === 'analytics' && (() => {
+        const eventCounts = analyticsEvents.reduce<Record<string, number>>((acc, ev) => {
+          acc[ev.event] = (acc[ev.event] || 0) + 1;
+          return acc;
+        }, {});
+
+        const paymentSplit = orders.reduce<Record<string, number>>(
+          (acc, o) => {
+            const m = o.payment_method || (o.id === 'RSH-20410' ? 'orange' : o.id === 'RSH-20377' ? 'cash' : 'mtn');
+            acc[m] = (acc[m] || 0) + o.total_amount;
+            return acc;
+          },
+          { mtn: 0, orange: 0, cash: 0 }
+        );
+
+        const maxPay = Math.max(1, paymentSplit.mtn, paymentSplit.orange, paymentSplit.cash);
+
+        const handleExportCsv = () => {
+          const header = ['ID', 'Boutique', 'Adresse', 'Telephone', 'Statut', 'Sous-total', 'Livraison', 'Remise', 'Total', 'Date'];
+          const rows = orders.map((o) => [
+            o.id,
+            `"${(o.shop_name || '').replace(/"/g, '""')}"`,
+            `"${(o.delivery_address || '').replace(/"/g, '""')}"`,
+            o.delivery_phone,
+            o.status,
+            o.subtotal,
+            o.delivery_fee,
+            o.discount_amount,
+            o.total_amount,
+            o.created_at,
+          ]);
+          const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `rush-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+          triggerToast('Export CSV téléchargé');
+        };
+
+        return (
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-black text-lg text-ink">Analytics & Conversion RUSH</h2>
+                <p className="text-[12.5px] font-semibold text-ink-muted">
+                  Télémétrie session client, répartition des paiements Cameroun et export comptable.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="h-10 px-4 rounded-pill bg-ink text-white text-[12.5px] font-black hover:bg-brand transition-colors cursor-pointer"
+              >
+                Exporter Commandes (CSV)
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                { k: 'product_view', label: 'Vues produits' },
+                { k: 'search', label: 'Recherches' },
+                { k: 'add_to_cart', label: 'Ajouts panier' },
+                { k: 'checkout_start', label: 'Checkouts' },
+                { k: 'order_placed', label: 'Commandes live' },
+              ].map((m) => (
+                <div key={m.k} className="card bg-surface p-4 rounded-xl border border-border-warm-light shadow-warm-1">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-ink-muted">{m.label}</div>
+                  <div className="text-2xl font-black text-ink mt-1.5">{eventCounts[m.k] || 0}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="card bg-surface p-5 rounded-xl border border-border-warm-light shadow-warm-1 flex flex-col gap-4">
+                <h3 className="font-black text-[15px] text-ink">Volume par méthode de paiement</h3>
+                {[
+                  { id: 'mtn', label: 'MTN Mobile Money', color: '#C79A00', bg: '#FFF6D6' },
+                  { id: 'orange', label: 'Orange Money', color: '#E2730B', bg: '#FFE9D6' },
+                  { id: 'cash', label: 'Cash à la livraison', color: '#15A05A', bg: '#E6F6EC' },
+                ].map((pm) => {
+                  const amount = paymentSplit[pm.id] || 0;
+                  const pct = Math.round((amount / maxPay) * 100);
+                  return (
+                    <div key={pm.id} className="flex flex-col gap-1.5">
+                      <div className="flex justify-between text-[12.5px] font-extrabold text-ink">
+                        <span>{pm.label}</span>
+                        <span>{formatPrice(amount)}</span>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-bg-app-light overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: pm.color }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="card bg-surface p-5 rounded-xl border border-border-warm-light shadow-warm-1 flex flex-col gap-3">
+                <h3 className="font-black text-[15px] text-ink">Derniers événements télémétrie</h3>
+                {analyticsEvents.length === 0 ? (
+                  <p className="text-[12.5px] font-semibold text-ink-muted py-4">
+                    Naviguez sur les produits, recherchez ou passez une commande pour alimenter le flux analytics en direct.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2 max-h-[210px] overflow-y-auto pr-1">
+                    {analyticsEvents.slice(0, 12).map((ev) => (
+                      <div key={ev.id} className="flex items-center justify-between text-[12px] p-2 rounded-lg bg-bg-app-light">
+                        <span className="font-extrabold text-ink truncate pr-2">
+                          <span className="text-brand mr-1.5">[{ev.event}]</span>
+                          {ev.label}
+                        </span>
+                        <span className="text-ink-muted font-bold flex-none">
+                          {ev.value ? formatPrice(ev.value) : new Date(ev.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Volet Latéral / Drawer de Détails de la Commande */}
       {selectedOrder && (

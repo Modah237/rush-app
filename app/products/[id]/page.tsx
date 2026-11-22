@@ -4,6 +4,7 @@ import React, { useState, use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/context/cart-context';
+import { useRushStore } from '@/context/rush-store-context';
 import { MOCK_PRODUCTS, getVariantsForProduct } from '@/lib/mock-data';
 import { productPath } from '@/lib/routes';
 import { getCategoryTheme } from '@/components/shared/category-theme';
@@ -21,11 +22,12 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   const router = useRouter();
   const { id } = use(params);
   const { addToCart } = useCart();
-  const [fav, setFav] = useState(false);
+  const { isFavoriteProduct, toggleFavoriteProduct, customProducts, trackEvent } = useRushStore();
   const [qty, setQty] = useState(1);
 
-  // Récupérer le produit
-  const p = MOCK_PRODUCTS.find((item) => item.id === id);
+  // Récupérer le produit (catalogue + créations commerçants locales)
+  const p = [...customProducts, ...MOCK_PRODUCTS].find((item) => item.id === id);
+  const fav = p ? isFavoriteProduct(p.id) : false;
 
   // Gérer l'image active pour la galerie
   const [activeImg, setActiveImg] = useState('');
@@ -33,8 +35,9 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
   useEffect(() => {
     if (p) {
       setActiveImg(p.image_url || '');
+      trackEvent('product_view', p.name, p.price, { product_id: p.id });
     }
-  }, [p]);
+  }, [p, trackEvent]);
 
   const variants = p ? getVariantsForProduct(p) : [];
   const [vSel, setVSel] = useState(variants[0]?.id || '');
@@ -97,7 +100,7 @@ export default function ProductDetailPage({ params }: ProductPageProps) {
               <Icon name="chevL" size={22} stroke={2.3} />
             </button>
             <button 
-              onClick={() => setFav(!fav)} 
+              onClick={() => toggleFavoriteProduct(p.id, p.name)} 
               className="w-10 h-10 rounded-full bg-surface shadow-warm-1 flex items-center justify-center text-ink cursor-pointer active:scale-95 transition-transform"
             >
               <Icon 

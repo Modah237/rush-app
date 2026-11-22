@@ -79,7 +79,7 @@ export const MOCK_SHOPS: Shop[] = [
     subscription_expires_at: null,
     created_at: '2026-05-20T10:00:00Z',
     cover_image_url: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&h=400&q=80',
-    logo_url: 'https://images.unsplash.com/photo-1607344645866-009c320c5ab8?auto=format&fit=crop&w=100&h=100&q=80',
+    logo_url: '/rush/brand/logo-mark.jpg',
     lat: 4.0875,
     lng: 9.7362,
     city: 'Douala',

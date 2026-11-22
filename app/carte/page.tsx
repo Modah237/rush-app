@@ -6,19 +6,27 @@ import CameroonMap, { MapCircle, MapMarker } from '@/components/maps/cameroon-ma
 import {
   ACTIVE_CAMEROON_RIDERS,
   CAMEROON_CITIES,
+  CAMEROON_LANDMARKS,
   CAMEROON_OVERVIEW,
   CAMEROON_ZONES,
+  PlaceSearchResult,
+  calculateDistanceKm,
 } from '@/lib/cameroon-geo';
+import { useUserLocation } from '@/context/location-context';
+import { useRushStore } from '@/context/rush-store-context';
 import { MOCK_SHOPS } from '@/lib/mock-data';
+import { shopPath } from '@/lib/routes';
 import { formatPrice } from '@/lib/utils';
 import Icon from '@/components/shared/icon';
 
 export default function CameroonMapPage() {
-  const [selectedCityId, setSelectedCityId] = useState<string>('douala');
+  const { location: userLoc, selectZone, setFromCoordinates } = useUserLocation();
+  const { pushToast } = useRushStore();
+  const [selectedCityId, setSelectedCityId] = useState<string>(userLoc.cityId || 'douala');
   const [showShops, setShowShops] = useState(true);
   const [showZones, setShowZones] = useState(true);
   const [showRiders, setShowRiders] = useState(true);
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(userLoc.zoneId || null);
 
   const selectedCity = useMemo(
     () => CAMEROON_CITIES.find((c) => c.id === selectedCityId) || null,
@@ -97,8 +105,20 @@ export default function CameroonMapPage() {
       });
     }
 
+    // Marqueur de position actuelle du client
+    list.push({
+      id: 'user-current-loc',
+      lat: userLoc.lat,
+      lng: userLoc.lng,
+      title: `Votre point (${userLoc.zoneName})`,
+      subtitle: `${userLoc.address} · Livraison ${formatPrice(userLoc.deliveryFee)}`,
+      badge: 'Ma zone',
+      variant: 'customer',
+      pulse: true,
+    });
+
     return list;
-  }, [showShops, showZones, showRiders]);
+  }, [showShops, showZones, showRiders, userLoc]);
 
   const circles: MapCircle[] = useMemo(() => {
     if (!showZones) return [];
@@ -178,10 +198,18 @@ export default function CameroonMapPage() {
             markers={markers}
             circles={circles}
             heightClassName="h-[460px] md:h-[560px]"
+            showSearchBar
             showCitySwitcher
             showLocateButton
-            interactiveHint="Cliquez sur un marqueur pour voir les détails et tarifs"
+            showLayerToggle
+            interactiveHint="Recherchez un carrefour, passez en Satellite ou cliquez sur un marqueur"
             onCitySelect={(cityId) => setSelectedCityId(cityId)}
+            onPlaceSelect={(place: PlaceSearchResult) => {
+              setFromCoordinates(place.lat, place.lng, place.label);
+              if (place.cityId) setSelectedCityId(place.cityId);
+              if (place.zoneId) setSelectedZoneId(place.zoneId);
+              pushToast(`Zone de livraison définie sur ${place.label}`, 'success');
+            }}
             onMarkerClick={(m) => {
               if (m.id.startsWith('city-')) {
                 setSelectedCityId(m.id.replace('city-', ''));
@@ -258,31 +286,48 @@ export default function CameroonMapPage() {
 
             {cityZones.length > 0 ? (
               <div className="flex flex-col gap-2 max-h-[340px] overflow-y-auto pr-1">
-                {cityZones.map((z) => (
-                  <button
-                    key={z.id}
-                    type="button"
-                    onClick={() => setSelectedZoneId(z.id)}
-                    className={`w-full text-left p-3 rounded-[14px] border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                      selectedZoneId === z.id
-                        ? 'bg-brand-tint/35 border-brand'
-                        : 'bg-bg-app-light/70 border-border-warm-light hover:bg-bg-app-light'
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="font-extrabold text-[13.5px] text-ink truncate">
-                        {z.name} <span className="text-ink-muted font-semibold">· {z.cityName}</span>
+                {cityZones.map((z) => {
+                  const isActiveUserZone = userLoc.zoneId === z.id;
+                  return (
+                    <div
+                      key={z.id}
+                      onClick={() => setSelectedZoneId(z.id)}
+                      className={`w-full text-left p-3 rounded-[14px] border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        selectedZoneId === z.id || isActiveUserZone
+                          ? 'bg-brand-tint/35 border-brand'
+                          : 'bg-bg-app-light/70 border-border-warm-light hover:bg-bg-app-light'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-extrabold text-[13.5px] text-ink truncate">
+                          {z.name} <span className="text-ink-muted font-semibold">· {z.cityName}</span>
+                        </div>
+                        <div className="text-[11px] font-semibold text-ink-muted truncate mt-0.5">
+                          {z.landmark}
+                        </div>
                       </div>
-                      <div className="text-[11px] font-semibold text-ink-muted truncate mt-0.5">
-                        {z.landmark}
+                      <div className="text-right flex-none flex flex-col items-end gap-1">
+                        <div className="font-black text-[13px] text-brand">{formatPrice(z.deliveryFee)}</div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectZone(z.id);
+                            setSelectedZoneId(z.id);
+                            pushToast(`Livraison réglée sur ${z.cityName} · ${z.name}`, 'success');
+                          }}
+                          className={`rounded-pill px-2 py-0.5 text-[10px] font-black cursor-pointer ${
+                            isActiveUserZone
+                              ? 'bg-success text-white'
+                              : 'bg-ink text-white hover:bg-brand'
+                          }`}
+                        >
+                          {isActiveUserZone ? '✓ Ma zone' : 'Livrer ici'}
+                        </button>
                       </div>
                     </div>
-                    <div className="text-right flex-none">
-                      <div className="font-black text-[13px] text-brand">{formatPrice(z.deliveryFee)}</div>
-                      <div className="text-[10.5px] font-bold text-ink-muted">{z.etaMinutes} min</div>
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="p-4 rounded-[14px] bg-bg-app-light text-[12.5px] font-semibold text-ink-light leading-relaxed">
@@ -295,27 +340,55 @@ export default function CameroonMapPage() {
             )}
           </div>
 
+          {/* Repères rapides Cameroun */}
+          <div className="card bg-surface p-4 rounded-[20px] border border-border-warm-light shadow-warm-1 flex flex-col gap-2.5">
+            <h2 className="font-black text-[14.5px] text-ink">Carrefours & Repères ({CAMEROON_LANDMARKS.length})</h2>
+            <div className="flex flex-wrap gap-1.5">
+              {CAMEROON_LANDMARKS.slice(0, 8).map((lm) => (
+                <button
+                  key={lm.id}
+                  type="button"
+                  onClick={() => {
+                    setFromCoordinates(lm.lat, lm.lng, `${lm.name}, ${lm.cityName}`);
+                    setSelectedCityId(lm.cityId);
+                    pushToast(`Repère sélectionné : ${lm.name}`, 'info');
+                  }}
+                  className="rounded-pill bg-bg-app-light border border-border-warm-light px-2.5 py-1 text-[11px] font-bold text-ink-light hover:border-brand hover:text-brand cursor-pointer transition-colors"
+                >
+                  {lm.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Boutiques partenaires sur la carte */}
           <div className="card bg-surface p-5 rounded-[20px] border border-border-warm-light shadow-warm-1 flex flex-col gap-3">
             <h2 className="font-black text-[16px] text-ink">Boutiques géolocalisées</h2>
             <div className="flex flex-col gap-2.5">
-              {MOCK_SHOPS.map((shop) => (
-                <Link
-                  key={shop.id}
-                  href="/categories"
-                  className="flex items-center justify-between gap-3 p-3 rounded-[14px] bg-bg-app-light/70 border border-border-warm-light hover:border-brand/30 transition-all"
-                >
-                  <div className="min-w-0">
-                    <div className="font-extrabold text-[13px] text-ink truncate">{shop.name}</div>
-                    <div className="text-[11px] font-semibold text-ink-muted mt-0.5">
-                      {shop.quarter || 'Douala'} · {shop.eta_minutes} min · ★ {shop.rating}
+              {MOCK_SHOPS.map((shop) => {
+                const distFromUser =
+                  typeof shop.lat === 'number' && typeof shop.lng === 'number'
+                    ? calculateDistanceKm(userLoc.lat, userLoc.lng, shop.lat, shop.lng)
+                    : null;
+                return (
+                  <Link
+                    key={shop.id}
+                    href={shopPath(shop.id)}
+                    className="flex items-center justify-between gap-3 p-3 rounded-[14px] bg-bg-app-light/70 border border-border-warm-light hover:border-brand/30 transition-all"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-extrabold text-[13px] text-ink truncate">{shop.name}</div>
+                      <div className="text-[11px] font-semibold text-ink-muted mt-0.5">
+                        {shop.quarter || 'Douala'} · {distFromUser !== null ? `${distFromUser} km · ` : ''}
+                        {shop.eta_minutes} min · ★ {shop.rating}
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-[11.5px] font-black text-brand flex-none">
-                    {shop.delivery_fee === 0 ? 'Gratuit' : formatPrice(shop.delivery_fee)}
-                  </span>
-                </Link>
-              ))}
+                    <span className="text-[11.5px] font-black text-brand flex-none">
+                      {shop.delivery_fee === 0 ? 'Gratuit' : formatPrice(shop.delivery_fee)}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
 

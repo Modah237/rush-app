@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { CartItem, Product, ProductVariant } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { syncCart, mergeGuestCart } from '@/app/actions/cart';
+import { useOptionalRushStore } from '@/context/rush-store-context';
 
 interface CartContextType {
   cart: CartItem[];
@@ -18,6 +19,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const rushStore = useOptionalRushStore();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -75,11 +77,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // 3. Sauvegarder dans localStorage + Synchroniser avec le serveur
+  // 3. Sauvegarder dans localStorage + Synchroniser avec le serveur si connecté
   useEffect(() => {
     if (isLoaded) {
       localStorage.setItem('rush_cart', JSON.stringify(cart));
-      syncCart(cart, userId, sessionId);
+      if (userId) {
+        syncCart(cart, userId, sessionId);
+      }
     }
   }, [cart, isLoaded, userId, sessionId]);
 
@@ -89,6 +93,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addToCart = (product: Product, qty = 1, variant: ProductVariant | null = null) => {
     const key = product.id + (variant ? `:${variant.id}` : '');
     const unitPrice = product.price + (variant ? variant.price_delta : 0);
+
+    rushStore?.pushToast(
+      `${qty}× ${product.name} ajouté au panier`,
+      'success',
+      { label: 'Panier', href: '/cart' }
+    );
+    rushStore?.trackEvent('add_to_cart', product.name, unitPrice * qty, {
+      product_id: product.id,
+      qty,
+    });
 
     setCart((prevCart) => {
       const existingItemIndex = prevCart.findIndex((item) => item.key === key);

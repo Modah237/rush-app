@@ -2,7 +2,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
-import { CAMEROON_CITIES, CAMEROON_OVERVIEW } from '@/lib/cameroon-geo';
+import {
+  CAMEROON_CITIES,
+  CAMEROON_OVERVIEW,
+  PlaceSearchResult,
+  fetchRoadRoute,
+  searchCameroonPlaces,
+} from '@/lib/cameroon-geo';
 import Icon from '@/components/shared/icon';
 
 export type MapMarkerVariant = 'shop' | 'customer' | 'rider' | 'pickup' | 'dropoff' | 'city' | 'zone';
@@ -44,11 +50,15 @@ export interface CameroonMapProps {
   heightClassName?: string;
   showCitySwitcher?: boolean;
   showLocateButton?: boolean;
+  showLayerToggle?: boolean;
+  showSearchBar?: boolean;
+  useRoadRouting?: boolean;
   fitMarkers?: boolean;
   interactiveHint?: string;
   onMapClick?: (lat: number, lng: number) => void;
   onMarkerClick?: (marker: MapMarker) => void;
   onCitySelect?: (cityId: string) => void;
+  onPlaceSelect?: (place: PlaceSearchResult) => void;
 }
 
 function escapeHtml(text: string): string {
@@ -111,14 +121,19 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
   heightClassName = 'h-[320px]',
   showCitySwitcher = false,
   showLocateButton = false,
+  showLayerToggle = true,
+  showSearchBar = false,
+  useRoadRouting = false,
   fitMarkers = false,
   interactiveHint,
   onMapClick,
   onMarkerClick,
   onCitySelect,
+  onPlaceSelect,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import('leaflet').Map | null>(null);
+  const tileLayerRef = useRef<import('leaflet').TileLayer | null>(null);
   const layerGroupRef = useRef<import('leaflet').LayerGroup | null>(null);
   const onMapClickRef = useRef(onMapClick);
   const onMarkerClickRef = useRef(onMarkerClick);
@@ -127,6 +142,12 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [activeCity, setActiveCity] = useState<string>('douala');
+  const [mapLayer, setMapLayer] = useState<'street' | 'satellite'>('street');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [resolvedRoutes, setResolvedRoutes] = useState<MapRoute[] | null>(null);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -150,10 +171,16 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
         attributionControl: true,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO · Cameroun',
+      const tile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap · Cameroun',
         maxZoom: 19,
       }).addTo(mapInstance);
+      tileLayerRef.current = tile;
+
+      // Garantir le recalcul des dimensions Leaflet après montage CSS
+      setTimeout(() => {
+        mapInstance?.invalidateSize();
+      }, 150);
 
       const group = L.layerGroup().addTo(mapInstance);
 
@@ -179,11 +206,93 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
         mapInstance.remove();
       }
       mapRef.current = null;
+      tileLayerRef.current = null;
       layerGroupRef.current = null;
       setIsReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Bascule Plan / Satellite (Esri World Imagery très utile pour les quartiers du Cameroun)
+  useEffect(() => {
+    let cancelled = false;
+    async function switchTiles() {
+      const map = mapRef.current;
+      if (!map || !isReady) return;
+      const L = (await import('leaflet')).default;
+      if (cancelled) return;
+
+      if (tileLayerRef.current) {
+        map.removeLayer(tileLayerRef.current);
+      }
+
+      const url =
+        mapLayer === 'satellite'
+          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      const attribution =
+        mapLayer === 'satellite'
+          ? '&copy; Esri Satellite · Cameroun'
+          : '&copy; OpenStreetMap · Cameroun';
+
+      const nextTile = L.tileLayer(url, { attribution, maxZoom: 19 }).addTo(map);
+      nextTile.bringToBack();
+      tileLayerRef.current = nextTile;
+      map.invalidateSize();
+    }
+    switchTiles();
+    return () => {
+      cancelled = true;
+    };
+  }, [mapLayer, isReady]);
+
+  // Résolution automatique d'itinéraire routier OSRM si useRoadRouting est activé
+  useEffect(() => {
+    if (!useRoadRouting || routes.length === 0) {
+      setResolvedRoutes(null);
+      return;
+    }
+    let cancelled = false;
+    async function resolveAllRoutes() {
+      const next = await Promise.all(
+        routes.map(async (r) => {
+          if (r.points.length !== 2) return r;
+          const res = await fetchRoadRoute(r.points[0], r.points[1]);
+          return { ...r, points: res.points };
+        })
+      );
+      if (!cancelled) {
+        setResolvedRoutes(next);
+      }
+    }
+    resolveAllRoutes();
+    return () => {
+      cancelled = true;
+    };
+  }, [routes, useRoadRouting]);
+
+  // Recherche de repères & adresses au Cameroun
+  useEffect(() => {
+    if (!showSearchBar || !searchOpen) return;
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      const results = await searchCameroonPlaces(trimmed, true);
+      if (!cancelled) {
+        setSearchResults(results);
+        setIsSearching(false);
+      }
+    }, 280);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, showSearchBar, searchOpen]);
 
   // Mise à jour de la caméra quand center/zoom changent
   useEffect(() => {
@@ -222,13 +331,14 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
         circle.addTo(group);
       });
 
-      // Itinéraires (polylines)
-      routes.forEach((route) => {
+      // Itinéraires (polylines : OSRM routier si résolu, sinon tracé direct)
+      const activeRoutes = resolvedRoutes || routes;
+      activeRoutes.forEach((route) => {
         if (route.points.length < 2) return;
         L.polyline(route.points, {
           color: route.color || '#F50012',
           weight: route.weight || 4,
-          opacity: 0.85,
+          opacity: 0.88,
           dashArray: route.dashed ? '8, 8' : undefined,
           lineCap: 'round',
           lineJoin: 'round',
@@ -277,7 +387,7 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [markers, routes, circles, isReady, fitMarkers]);
+  }, [markers, routes, resolvedRoutes, circles, isReady, fitMarkers]);
 
   const handleSelectCity = (cityId: string) => {
     setActiveCity(cityId);
@@ -313,10 +423,10 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
         setLocating(false);
       },
       () => {
-        setGeoError('Autorisez la localisation GPS ou cliquez sur la carte.');
+        setGeoError('GPS bloqué par le navigateur — tapez votre carrefour ci-dessus ou cliquez sur la carte.');
         setLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
     );
   };
 
@@ -330,49 +440,146 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
     { id: 'buea', label: 'Buea' },
   ];
 
+  const handlePickPlace = (place: PlaceSearchResult) => {
+    setSearchOpen(false);
+    setSearchQuery(place.label);
+    setSearchResults([]);
+    mapRef.current?.flyTo([place.lat, place.lng], 15, { duration: 0.65 });
+    if (onPlaceSelect) {
+      onPlaceSelect(place);
+    } else if (onMapClickRef.current) {
+      onMapClickRef.current(place.lat, place.lng);
+    }
+  };
+
   return (
-    <div className="relative w-full overflow-hidden rounded-[20px] border border-border-warm bg-[#EDE9E5] shadow-warm-1">
-      {/* Barre supérieure villes du Cameroun */}
-      {(showCitySwitcher || showLocateButton) && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-warm bg-surface/95 px-3 py-2.5 backdrop-blur-md">
-          {showCitySwitcher && (
-            <div className="hide-scroll flex flex-1 items-center gap-1.5 overflow-x-auto">
-              {quickCities.map((c) => {
-                const selected = activeCity === c.id;
-                return (
+    <div className="relative w-full rounded-[20px] border border-border-warm bg-[#EDE9E5] shadow-warm-1">
+      {/* Barre supérieure villes du Cameroun & contrôles */}
+      {(showCitySwitcher || showLocateButton || showLayerToggle || showSearchBar) && (
+        <div className="relative z-30 flex flex-col gap-2 rounded-t-[20px] border-b border-border-warm bg-surface/95 px-3 py-2.5 backdrop-blur-md">
+          {showSearchBar && (
+            <div className="relative">
+              <div className="flex items-center gap-2 rounded-md border border-border-warm bg-bg-app-light px-3 h-9.5 focus-within:ring-2 focus-within:ring-brand focus-within:bg-surface">
+                <Icon name="search" size={14} className="text-ink-muted" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSearchOpen(true);
+                  }}
+                  onFocus={() => {
+                    if (searchQuery.trim()) setSearchOpen(true);
+                  }}
+                  placeholder="Rechercher un carrefour, quartier ou repère au Cameroun (ex. Rond-point Deido, Bastos...)"
+                  className="min-w-0 flex-1 bg-transparent text-[12.5px] font-bold text-ink outline-none placeholder:text-ink-muted"
+                />
+                {isSearching && <span className="text-[10.5px] font-bold text-ink-muted">...</span>}
+                {searchQuery && (
                   <button
-                    key={c.id}
                     type="button"
-                    onClick={() => handleSelectCity(c.id)}
-                    className={`flex-none rounded-pill px-3 py-1 text-[11.5px] font-extrabold transition-colors cursor-pointer ${
-                      selected
-                        ? 'bg-ink text-white shadow-sm'
-                        : 'bg-bg-app-light text-ink-light hover:bg-brand-tint hover:text-brand'
-                    }`}
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSearchResults([]);
+                      setSearchOpen(false);
+                    }}
+                    className="text-ink-muted hover:text-brand cursor-pointer"
                   >
-                    {c.label}
+                    <Icon name="x" size={14} />
                   </button>
-                );
-              })}
+                )}
+              </div>
+
+              {searchOpen && searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-11 z-30 max-h-56 overflow-y-auto rounded-[14px] border border-border-warm bg-surface shadow-warm-3 p-1.5 flex flex-col gap-1">
+                  {searchResults.map((place) => (
+                    <button
+                      key={place.id}
+                      type="button"
+                      onClick={() => handlePickPlace(place)}
+                      className="flex items-center justify-between gap-2 rounded-[10px] px-3 py-2 text-left hover:bg-bg-app-light cursor-pointer transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] font-extrabold text-ink truncate">{place.label}</div>
+                        <div className="text-[11px] font-semibold text-ink-muted truncate">{place.sublabel}</div>
+                      </div>
+                      <span className="flex-none rounded-pill bg-bg-app-light px-2 py-0.5 text-[10px] font-black text-ink-light">
+                        {place.source === 'local' ? 'Repère RUSH' : 'OSM'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {showLocateButton && (
-            <button
-              type="button"
-              onClick={handleLocateMe}
-              disabled={locating}
-              className="flex items-center gap-1.5 rounded-pill bg-brand-tint px-3 py-1.5 text-[11.5px] font-black text-brand hover:bg-brand hover:text-white transition-colors cursor-pointer disabled:opacity-60"
-            >
-              <Icon name="pin" size={13} stroke={2.4} />
-              {locating ? 'Localisation...' : 'Ma position GPS'}
-            </button>
+          {(showCitySwitcher || showLocateButton || showLayerToggle) && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {showCitySwitcher && (
+                <div className="hide-scroll flex flex-1 items-center gap-1.5 overflow-x-auto">
+                  {quickCities.map((c) => {
+                    const selected = activeCity === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => handleSelectCity(c.id)}
+                        className={`flex-none rounded-pill px-3 py-1 text-[11.5px] font-extrabold transition-colors cursor-pointer ${
+                          selected
+                            ? 'bg-ink text-white shadow-sm'
+                            : 'bg-bg-app-light text-ink-light hover:bg-brand-tint hover:text-brand'
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5 ml-auto">
+                {showLayerToggle && (
+                  <div className="flex items-center rounded-pill border border-border-warm bg-bg-app-light p-0.5 text-[11px] font-extrabold">
+                    <button
+                      type="button"
+                      onClick={() => setMapLayer('street')}
+                      className={`rounded-pill px-2.5 py-1 cursor-pointer transition-colors ${
+                        mapLayer === 'street' ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted'
+                      }`}
+                    >
+                      Plan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMapLayer('satellite')}
+                      className={`rounded-pill px-2.5 py-1 cursor-pointer transition-colors ${
+                        mapLayer === 'satellite' ? 'bg-ink text-white shadow-sm' : 'text-ink-muted'
+                      }`}
+                    >
+                      Satellite
+                    </button>
+                  </div>
+                )}
+
+                {showLocateButton && (
+                  <button
+                    type="button"
+                    onClick={handleLocateMe}
+                    disabled={locating}
+                    className="flex items-center gap-1.5 rounded-pill bg-brand-tint px-3 py-1.5 text-[11.5px] font-black text-brand hover:bg-brand hover:text-white transition-colors cursor-pointer disabled:opacity-60"
+                  >
+                    <Icon name="pin" size={13} stroke={2.4} />
+                    {locating ? 'GPS...' : 'Ma position'}
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
 
       {/* Conteneur Leaflet */}
-      <div className={`relative w-full ${heightClassName}`}>
+      <div className={`relative w-full overflow-hidden rounded-b-[20px] ${heightClassName}`}>
         <div ref={containerRef} className="h-full w-full z-10" />
 
         {!isReady && (
@@ -389,8 +596,16 @@ export const CameroonMap: React.FC<CameroonMapProps> = ({
         )}
 
         {geoError && (
-          <div className="absolute top-3 left-3 right-3 z-20 rounded-md bg-brand-tint px-3 py-2 text-[11.5px] font-bold text-brand shadow-warm-2">
-            {geoError}
+          <div className="absolute top-3 left-3 right-3 z-20 rounded-md bg-brand-tint border border-brand/20 px-3 py-2 text-[11.5px] font-bold text-brand shadow-warm-2 flex items-center justify-between gap-2">
+            <span>{geoError}</span>
+            <button
+              type="button"
+              onClick={() => setGeoError(null)}
+              className="flex-none p-0.5 text-brand hover:opacity-75 cursor-pointer"
+              aria-label="Fermer l'alerte GPS"
+            >
+              <Icon name="x" size={14} stroke={2.5} />
+            </button>
           </div>
         )}
       </div>

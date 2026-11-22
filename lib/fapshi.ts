@@ -3,9 +3,10 @@
  * Permet d'initier et de vérifier des transactions MTN Mobile Money et Orange Money au Cameroun.
  */
 
-const FAPSHI_API_URL = process.env.FAPSHI_API_URL || 'https://api.fapshi.com';
+const FAPSHI_API_URL = process.env.FAPSHI_API_URL || 'https://live.fapshi.com';
 const FAPSHI_API_USER = process.env.FAPSHI_API_USER || '';
 const FAPSHI_API_KEY = process.env.FAPSHI_API_KEY || '';
+const FAPSHI_FORCE_SIMULATE = process.env.FAPSHI_MODE === 'sandbox_mock';
 
 interface InitiatePaymentParams {
   amount: number;
@@ -13,6 +14,7 @@ interface InitiatePaymentParams {
   email?: string;
   externalId: string; // ID de notre commande (ex: RSH-20512)
   redirectUrl: string;
+  simulate?: boolean;
 }
 
 interface InitiatePaymentResponse {
@@ -20,6 +22,7 @@ interface InitiatePaymentResponse {
   paymentUrl?: string; // Lien de redirection
   message?: string;
   transId?: string; // ID de transaction côté Fapshi
+  simulated?: boolean;
 }
 
 export async function initiatePayment({
@@ -28,24 +31,23 @@ export async function initiatePayment({
   email = 'client@rush.cm',
   externalId,
   redirectUrl,
+  simulate = false,
 }: InitiatePaymentParams): Promise<InitiatePaymentResponse> {
-  // Si les clés de production ne sont pas configurées, on simule un paiement sandbox réussi
-  if (!FAPSHI_API_USER || !FAPSHI_API_KEY) {
-    console.warn("Fapshi API credentials manquants. Mode sandbox simulation activé.");
+  // Simulation locale sécurisée si clés absentes ou mode test/agent IA explicite
+  if (simulate || FAPSHI_FORCE_SIMULATE || !FAPSHI_API_USER || !FAPSHI_API_KEY) {
     const isSub = externalId.startsWith('SUB-');
-    const fallbackUrl = isSub 
+    const fallbackUrl = isSub
       ? `/merchant?simulated_subscription=1&sub_id=${externalId}`
       : `/orders/${externalId}?simulated_payment=1`;
     return {
       success: true,
       paymentUrl: fallbackUrl,
-      transId: `FAP-${Math.floor(Math.random() * 900000 + 100000)}`,
-      message: 'Simulation Sandbox initialisée avec succès.',
+      transId: `FAP-SIM-${Math.floor(Math.random() * 900000 + 100000)}`,
+      message: 'Simulation Fapshi Sandbox initialisée avec succès.',
+      simulated: true,
     };
   }
 
-  // Nettoyage du numéro de téléphone (Fapshi attend le format standard camerounais sans code pays par défaut, ou avec)
-  // Par exemple : 678451290 (9 chiffres) ou 237678451290
   let cleanPhone = phone.replace(/\s+/g, '');
   if (cleanPhone.startsWith('+237')) {
     cleanPhone = cleanPhone.slice(4);
@@ -54,38 +56,45 @@ export async function initiatePayment({
   }
 
   try {
-    const response = await fetch(`${FAPSHI_API_URL}/payment/initiate`, {
+    const response = await fetch(`${FAPSHI_API_URL}/initiate-pay`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api_user': FAPSHI_API_USER,
-        'api_key': FAPSHI_API_KEY,
+        apiuser: FAPSHI_API_USER,
+        apikey: FAPSHI_API_KEY,
       },
       body: JSON.stringify({
-        amount: amount,
+        amount,
         phone: cleanPhone,
-        email: email,
+        email,
         userId: 'RUSH_PLATFORM',
-        externalId: externalId,
-        redirectUrl: redirectUrl,
+        externalId,
+        redirectUrl,
+        message: `Commande RUSH ${externalId}`,
       }),
     });
 
     if (!response.ok) {
-      const errData = await response.json();
+      let errMsg = "Erreur lors de l'initialisation du paiement Fapshi";
+      try {
+        const errData = await response.json();
+        errMsg = errData.message || errMsg;
+      } catch {
+        // Ignore invalid JSON error payload
+      }
       return {
         success: false,
-        message: errData.message || 'Erreur lors de l\'initialisation du paiement Fapshi',
+        message: errMsg,
       };
     }
 
     const data = await response.json();
-    // Le format de retour de Fapshi : { link: "https://fapshi.com/pay/...", transId: "..." }
     return {
       success: true,
       paymentUrl: data.link,
       transId: data.transId,
       message: 'Paiement Fapshi initialisé avec succès.',
+      simulated: false,
     };
   } catch (error) {
     console.error('Erreur de requête Fapshi initiatePayment:', error);
@@ -99,17 +108,20 @@ export async function initiatePayment({
 /**
  * Permet de vérifier le statut d'une transaction Fapshi
  */
-export async function verifyPayment(transId: string): Promise<{ success: boolean; status: 'paid' | 'failed' | 'pending'; raw?: any }> {
-  if (!FAPSHI_API_USER || !FAPSHI_API_KEY) {
-    return { success: true, status: 'paid' }; // Sandbox simulation
+export async function verifyPayment(
+  transId: string,
+  simulate = false
+): Promise<{ success: boolean; status: 'paid' | 'failed' | 'pending'; raw?: unknown }> {
+  if (simulate || FAPSHI_FORCE_SIMULATE || !FAPSHI_API_USER || !FAPSHI_API_KEY || transId.startsWith('FAP-SIM-')) {
+    return { success: true, status: 'paid' };
   }
 
   try {
-    const response = await fetch(`${FAPSHI_API_URL}/payment/status/${transId}`, {
+    const response = await fetch(`${FAPSHI_API_URL}/payment-status/${encodeURIComponent(transId)}`, {
       method: 'GET',
       headers: {
-        'api_user': FAPSHI_API_USER,
-        'api_key': FAPSHI_API_KEY,
+        apiuser: FAPSHI_API_USER,
+        apikey: FAPSHI_API_KEY,
       },
     });
 
@@ -118,10 +130,10 @@ export async function verifyPayment(transId: string): Promise<{ success: boolean
     }
 
     const data = await response.json();
-    // Format attendu : { status: "successful" | "failed" | "pending", ... }
+    const rawStatus = String(data.status || '').toLowerCase();
     let status: 'paid' | 'failed' | 'pending' = 'pending';
-    if (data.status === 'successful') status = 'paid';
-    else if (data.status === 'failed') status = 'failed';
+    if (rawStatus === 'successful') status = 'paid';
+    else if (rawStatus === 'failed' || rawStatus === 'expired') status = 'failed';
 
     return {
       success: true,

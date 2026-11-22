@@ -3,8 +3,10 @@
 import React, { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { productPath } from '@/lib/routes';
+import { productPath, shopPath } from '@/lib/routes';
 import { useCart } from '@/context/cart-context';
+import { useRushStore } from '@/context/rush-store-context';
+import { useUserLocation } from '@/context/location-context';
 import { MOCK_PRODUCTS, MOCK_SHOPS } from '@/lib/mock-data';
 import { CAMEROON_CITIES, CAMEROON_ZONES } from '@/lib/cameroon-geo';
 import CameroonMap from '@/components/maps/cameroon-map';
@@ -17,18 +19,69 @@ import SafeImage from '@/components/shared/safe-image';
 export default function Home() {
   const router = useRouter();
   const { addToCart } = useCart();
+  const { pushToast, trackEvent, customProducts } = useRushStore();
+  const { location, openPicker } = useUserLocation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [isListening, setIsListening] = useState(false);
   const [showMapPreview, setShowMapPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const popularProducts = MOCK_PRODUCTS.slice(0, 8);
-  const promoProducts = MOCK_PRODUCTS.filter((p) => p.old_price).slice(0, 4);
-  const heroProducts = MOCK_PRODUCTS.slice(0, 3);
+  const allProducts = [...customProducts, ...MOCK_PRODUCTS];
+  const popularProducts = allProducts.slice(0, 8);
+  const promoProducts = allProducts.filter((p) => p.old_price).slice(0, 4);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const query = searchQuery.trim();
+    if (query) trackEvent('search', query);
     router.push(query ? `/categories?q=${encodeURIComponent(query)}` : '/categories');
+  };
+
+  const handleVoiceSearch = () => {
+    const SpeechRec =
+      typeof window !== 'undefined'
+        ? (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).SpeechRecognition ||
+          (window as unknown as { webkitSpeechRecognition?: any }).webkitSpeechRecognition
+        : null;
+
+    if (!SpeechRec) {
+      pushToast('Recherche vocale non supportée sur ce navigateur — essayez "Riz" ou "Ndolé"', 'info');
+      return;
+    }
+
+    const recognition = new SpeechRec();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results?.[0]?.[0]?.transcript || '';
+      setIsListening(false);
+      if (transcript) {
+        setSearchQuery(transcript);
+        trackEvent('search', transcript);
+        router.push(`/categories?q=${encodeURIComponent(transcript)}`);
+      }
+    };
+    recognition.onerror = () => {
+      setIsListening(false);
+      pushToast('Micro indisponible ou autorisation refusée', 'warning');
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
+
+  const handleVisualSearchFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const rawName = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+    const keywords = ['riz', 'tomate', 'banane', 'plantain', 'jus', 'eau', 'poulet', 'ndole', 'pain', 'huile'];
+    const matched = keywords.find((k) => rawName.toLowerCase().includes(k));
+    const q = matched || (rawName.length > 2 && !rawName.toLowerCase().startsWith('img') ? rawName : 'frais');
+    trackEvent('search', `visual:${q}`);
+    pushToast(`Recherche visuelle lancée pour « ${q} »`, 'info');
+    router.push(`/categories?q=${encodeURIComponent(q)}`);
   };
 
   const promoBanners = [
@@ -83,11 +136,17 @@ export default function Home() {
         <div className="relative grid gap-8 px-5 pb-8 pt-6 md:grid-cols-[1.1fr_0.9fr] md:items-center md:gap-10 md:px-12 md:py-16 lg:px-16">
           {/* Left Column: Copy & Actions */}
           <div className="flex min-w-0 flex-col gap-6">
-            <div className="flex items-center justify-between md:block">
-              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-brand px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-white shadow-brand">
-                <Icon name="truck" size={14} stroke={2.3} />
-                Livraison RUSH Cameroun · Douala & Yaoundé
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={openPicker}
+                className="inline-flex w-fit items-center gap-2 rounded-full bg-brand px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.06em] text-white shadow-brand hover:bg-brand-hover cursor-pointer transition-colors"
+                title="Changer de ville ou de quartier au Cameroun"
+              >
+                <Icon name="pin" size={13} stroke={2.4} />
+                {location.cityName} · {location.zoneName} ({location.etaMinutes} min)
+                <Icon name="chevR" size={11} stroke={2.6} />
+              </button>
               <Link href="/account" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white md:hidden">
                 <Icon name="user" size={18} stroke={2.2} />
               </Link>
@@ -112,20 +171,38 @@ export default function Home() {
                   placeholder="Que voulez-vous recevoir aujourd'hui ?"
                   className="min-w-0 flex-1 bg-transparent text-[14.5px] font-bold text-ink outline-none placeholder:text-ink-muted"
                 />
-                <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-app-light text-ink-light hover:text-brand" title="Micro">
+                <button
+                  type="button"
+                  onClick={handleVoiceSearch}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors cursor-pointer ${
+                    isListening ? 'bg-brand text-white animate-pulse' : 'bg-bg-app-light text-ink-light hover:text-brand'
+                  }`}
+                  title={isListening ? 'Écoute en cours...' : 'Recherche vocale'}
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                     <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
                     <path d="M12 19v3" />
                   </svg>
                 </button>
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-app-light text-ink-light hover:text-brand" title="Caméra">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-app-light text-ink-light hover:text-brand cursor-pointer"
+                  title="Recherche par photo"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
                     <circle cx="12" cy="13" r="3" />
                   </svg>
                 </button>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleVisualSearchFile}
+                  className="hidden"
+                />
               </div>
               <button className="flex h-14 items-center justify-center gap-2 rounded-[16px] bg-brand px-6 text-[14.5px] font-black text-white shadow-brand hover:bg-brand-hover active:scale-[0.98] transition-all whitespace-nowrap">
                 Commander maintenant
@@ -298,11 +375,13 @@ export default function Home() {
         {showMapPreview && (
           <div className="px-4 md:px-0 animate-scaleUp">
             <CameroonMap
-              center={[4.0511, 9.712]}
+              center={[location.lat, location.lng]}
               zoom={13}
-              heightClassName="h-[340px]"
+              heightClassName="h-[360px]"
+              showSearchBar
               showCitySwitcher
               showLocateButton
+              showLayerToggle
               markers={[
                 ...MOCK_SHOPS.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number').map((s) => ({
                   id: `home-shop-${s.id}`,
@@ -336,7 +415,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 gap-4 px-4 md:grid-cols-3 md:px-0">
           {MOCK_SHOPS.slice(0, 3).map((shop) => (
-            <ShopCard key={shop.id} s={shop} onOpen={() => router.push('/categories')} />
+            <ShopCard key={shop.id} s={shop} onOpen={(s) => router.push(shopPath(s.id))} />
           ))}
         </div>
       </section>

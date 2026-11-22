@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { CartItem, Order, OrderStatus, PaymentMethod } from '@/types';
 import { MOCK_PRODUCTS, getVariantsForProduct, MOCK_SHOPS } from '@/lib/mock-data';
 import { initiatePayment } from '@/lib/fapshi';
+import { evaluatePromoCode } from '@/lib/promos';
+import { CAMEROON_ZONES } from '@/lib/cameroon-geo';
 
 interface PlaceOrderParams {
   cart: CartItem[];
@@ -12,6 +14,13 @@ interface PlaceOrderParams {
   deliveryAddress: string;
   deliveryPhone: string;
   note?: string;
+  deliveryZoneId?: string | null;
+  deliveryLat?: number;
+  deliveryLng?: number;
+  tipAmount?: number;
+  scheduledSlot?: string;
+  substitutionPref?: 'call' | 'replace' | 'refund';
+  simulatePayment?: boolean;
 }
 
 interface PlaceOrderResult {
@@ -19,6 +28,7 @@ interface PlaceOrderResult {
   orderId?: string;
   paymentUrl?: string;
   message?: string;
+  orderSummary?: Order;
 }
 
 export async function placeOrder({
@@ -28,29 +38,39 @@ export async function placeOrder({
   deliveryAddress,
   deliveryPhone,
   note = '',
+  deliveryZoneId = null,
+  deliveryLat,
+  deliveryLng,
+  tipAmount = 0,
+  scheduledSlot = 'express',
+  substitutionPref = 'call',
+  simulatePayment = false,
 }: PlaceOrderParams): Promise<PlaceOrderResult> {
-  
   if (!cart || cart.length === 0) {
     return { success: false, message: 'Le panier est vide.' };
   }
 
   // 1. Recalcul et validation stricte des prix côté serveur
   let subtotal = 0;
-  const verifiedItems = [];
+  const verifiedItems: {
+    product_id: string;
+    product_name: string;
+    variant_name: string | null;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+  }[] = [];
 
   for (const item of cart) {
-    // Récupérer le vrai produit en base de données / mock
     const product = MOCK_PRODUCTS.find((p) => p.id === item.id);
     if (!product) {
       return { success: false, message: `Produit introuvable : ${item.name}` };
     }
 
-    // Vérifier le stock
     if (product.stock < item.qty) {
       return { success: false, message: `Stock insuffisant pour ${product.name}. Disponible : ${product.stock}` };
     }
 
-    // Valider la variante et récupérer le différentiel de prix
     let priceDelta = 0;
     let variantName = null;
     if (item.variant_id) {
@@ -77,26 +97,31 @@ export async function placeOrder({
     });
   }
 
-  // 2. Validation des frais de livraison
+  // 2. Validation des frais de livraison (zone Cameroun ou défaut 700 FCFA, gratuit >= 10 000 FCFA)
+  const matchedZone = deliveryZoneId ? CAMEROON_ZONES.find((z) => z.id === deliveryZoneId) : null;
+  const baseZoneFee = matchedZone ? matchedZone.deliveryFee : 700;
+  const promoEval = evaluatePromoCode(promoCode, subtotal, paymentMethod);
   const deliveryThreshold = 10000;
-  const deliveryFee = subtotal >= deliveryThreshold ? 0 : 700;
+  const deliveryFee = subtotal >= deliveryThreshold || promoEval.freeDelivery ? 0 : baseZoneFee;
 
-  // 3. Validation de code promo
-  let discountAmount = 0;
-  if (promoCode && promoCode.trim().toUpperCase() === 'RUSH25') {
-    discountAmount = Math.round(subtotal * 0.25);
-  }
+  // 3. Validation de code promo unifiée & pourboire Rusher sécurisé (0 à 5 000 FCFA, 100% au livreur)
+  const discountAmount = promoEval.valid ? promoEval.discountAmount : 0;
+  const safeTip = Math.max(0, Math.min(5000, Math.round(Number(tipAmount) || 0)));
+  const finalTotal = Math.max(0, subtotal + deliveryFee + safeTip - discountAmount);
 
-  const finalTotal = subtotal + deliveryFee - discountAmount;
-
-  // 4. Calcul des commissions & payouts de la plateforme (10% sur articles, 20% sur livraison)
+  // 4. Calcul des commissions & payouts de la plateforme (10% sur articles, 20% sur livraison, 0% sur pourboire)
   const platformCommissionRate = 0.10;
   const platformFee = Math.round(subtotal * platformCommissionRate) + Math.round(deliveryFee * 0.20);
   const vendorPayout = subtotal - Math.round(subtotal * platformCommissionRate);
-  const courierPayout = deliveryFee - Math.round(deliveryFee * 0.20);
+  const courierPayout = deliveryFee - Math.round(deliveryFee * 0.20) + safeTip;
 
-  // 5. Génération d'un ID de commande lisible (ex: RSH-20512)
+  // 5. Génération d'un ID de commande lisible et code PIN de remise colis
   const orderId = `RSH-${Math.floor(Math.random() * 90000 + 10000)}`;
+  const deliveryPin = String(Math.floor(1000 + Math.random() * 9000));
+  const primaryShopId = cart[0] ? MOCK_PRODUCTS.find((p) => p.id === cart[0].id)?.shop_id ?? null : null;
+  const primaryShop = MOCK_SHOPS.find((s) => s.id === primaryShopId);
+  const initialStatus: OrderStatus = paymentMethod === 'cash' ? 'confirmed' : 'confirmed';
+  const nowIso = new Date().toISOString();
 
   // 6. Sauvegarde dans Supabase si connecté
   try {
@@ -104,19 +129,19 @@ export async function placeOrder({
     const { data: { user } } = await supabase.auth.getUser();
 
     if (user) {
-      // Écriture de la commande avec commissions calculées
+      const dbStatus: OrderStatus = paymentMethod === 'cash' ? 'confirmed' : 'pending';
       const { error: orderError } = await supabase.from('orders').insert({
         id: orderId,
         user_id: user.id,
-        shop_id: cart[0] ? MOCK_PRODUCTS.find(p => p.id === cart[0].id)?.shop_id : null,
-        status: (paymentMethod === 'cash' ? 'confirmed' : 'pending') as OrderStatus,
+        shop_id: primaryShopId,
+        status: dbStatus,
         subtotal,
         delivery_fee: deliveryFee,
         discount_amount: discountAmount,
         total_amount: finalTotal,
         delivery_address: deliveryAddress,
         delivery_phone: deliveryPhone,
-        courier_name: null, // aucun livreur assigné au départ
+        courier_name: null,
         courier_phone: null,
         note,
         platform_commission_rate: platformCommissionRate,
@@ -128,30 +153,25 @@ export async function placeOrder({
       if (orderError) {
         console.error('Erreur Supabase insertion commande:', orderError);
       } else {
-        // Écriture des articles de commande
-        const itemsToInsert = verifiedItems.map(item => ({
-          order_id: orderId,
-          product_id: item.product_id,
-          product_name: item.product_name,
-          variant_name: item.variant_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-        }));
-        await supabase.from('order_items').insert(itemsToInsert);
+        await supabase.from('order_items').insert(
+          verifiedItems.map((item) => ({
+            order_id: orderId,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            variant_name: item.variant_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total_price: item.total_price,
+          }))
+        );
 
-        // Écriture du jalon initial
         await supabase.from('order_status_events').insert({
           order_id: orderId,
-          status: (paymentMethod === 'cash' ? 'confirmed' : 'pending') as OrderStatus,
+          status: dbStatus,
           notes: paymentMethod === 'cash' ? 'Commande payée à la livraison' : 'En attente de paiement mobile money',
         });
 
-        // 7. Création de la livraison associée en statut pending_assignment
-        const shopId = cart[0] ? MOCK_PRODUCTS.find(p => p.id === cart[0].id)?.shop_id : null;
-        const shopObj = MOCK_SHOPS.find(s => s.id === shopId);
-        const pickupAddress = shopObj ? `${shopObj.name}, Douala` : 'Boutique RUSH';
-
+        const pickupAddress = primaryShop ? `${primaryShop.name}, Douala` : 'Boutique RUSH';
         await supabase.from('deliveries').insert({
           order_id: orderId,
           courier_id: null,
@@ -163,18 +183,73 @@ export async function placeOrder({
         });
       }
     }
-  } catch (err) {
+  } catch {
     console.warn('Supabase non disponible ou erreur serveur. Exécution simulée active.');
   }
 
+  const orderSummary: Order = {
+    id: orderId,
+    user_id: null,
+    shop_id: primaryShopId,
+    courier_id: null,
+    status: initialStatus,
+    subtotal,
+    delivery_fee: deliveryFee,
+    discount_amount: discountAmount,
+    total_amount: finalTotal,
+    delivery_address: deliveryAddress,
+    delivery_phone: deliveryPhone,
+    courier_name: 'Eric N.',
+    courier_phone: '+237 6 77 11 22 33',
+    eta_minutes: matchedZone?.etaMinutes ?? 25,
+    note: note || null,
+    delivery_zone_id: deliveryZoneId,
+    promo_code_id: promoEval.valid ? promoEval.promo?.code ?? null : null,
+    promo_code: promoEval.valid ? promoEval.promo?.code ?? null : null,
+    created_at: nowIso,
+    updated_at: nowIso,
+    shop_name: primaryShop?.name || 'Boutique Partenaire RUSH',
+    delivery_lat: deliveryLat ?? matchedZone?.lat,
+    delivery_lng: deliveryLng ?? matchedZone?.lng,
+    delivery_city: matchedZone?.cityName || 'Douala',
+    delivery_zone: matchedZone?.name || undefined,
+    delivery_pin: deliveryPin,
+    tip_amount: safeTip,
+    scheduled_slot: scheduledSlot,
+    substitution_pref: substitutionPref,
+    payment_method: paymentMethod,
+    items: verifiedItems.map((i) => ({
+      product_id: i.product_id,
+      name: i.product_name,
+      qty: i.quantity,
+      unit_price: i.unit_price,
+      variant_name: i.variant_name,
+    })),
+    timeline: [
+      {
+        status: 'confirmed',
+        label: 'Commande confirmée',
+        note:
+          paymentMethod === 'cash'
+            ? 'Paiement en espèces prévu à la livraison'
+            : `Paiement ${paymentMethod === 'mtn' ? 'MTN MoMo' : 'Orange Money'} initié`,
+        at: nowIso,
+      },
+    ],
+  };
+
   // 8. Gestion du paiement avec Fapshi (MoMo / OM)
   if (paymentMethod === 'mtn' || paymentMethod === 'orange') {
-    const redirectUrl = `${process.env.APP_URL || 'http://localhost:3000'}/orders/${orderId}?status=success`;
+    const baseUrl =
+      process.env.APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    const redirectUrl = `${baseUrl}/orders/${orderId}?status=success`;
     const payment = await initiatePayment({
       amount: finalTotal,
       phone: deliveryPhone,
       externalId: orderId,
-      redirectUrl: redirectUrl,
+      redirectUrl,
+      simulate: simulatePayment,
     });
 
     if (payment.success) {
@@ -183,13 +258,14 @@ export async function placeOrder({
         orderId,
         paymentUrl: payment.paymentUrl,
         message: 'Commande créée. En attente de paiement.',
-      };
-    } else {
-      return {
-        success: false,
-        message: payment.message || 'Impossible d\'initier le paiement mobile money. Veuillez réessayer.',
+        orderSummary,
       };
     }
+
+    return {
+      success: false,
+      message: payment.message || "Impossible d'initier le paiement mobile money. Veuillez réessayer.",
+    };
   }
 
   // 9. Paiement à la livraison
@@ -198,5 +274,6 @@ export async function placeOrder({
     orderId,
     paymentUrl: `/orders/${orderId}?confirm_cash=1`,
     message: 'Commande validée avec succès.',
+    orderSummary,
   };
 }

@@ -7,6 +7,7 @@ import SafeImage from './safe-image';
 import Stars from './stars';
 import Icon from './icon';
 import { formatPrice } from '@/lib/utils';
+import { useOptionalRushStore } from '@/context/rush-store-context';
 
 interface ProductCardProps {
   p: Product;
@@ -24,6 +25,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const slug = categorySlug || p.category_slug;
   const theme = getCategoryTheme(slug);
   const [bump, setBump] = useState(false);
+  const rushStore = useOptionalRushStore();
+  const isFav = rushStore?.isFavoriteProduct(p.id) ?? false;
 
   const handleAddClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -60,6 +63,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </span>
           )}
         </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            rushStore?.toggleFavoriteProduct(p.id, p.name);
+          }}
+          aria-label={`Favori ${p.name}`}
+          className="absolute top-[12px] right-[12px] z-20 w-7.5 h-7.5 rounded-full bg-surface/90 backdrop-blur-sm shadow-warm-1 flex items-center justify-center cursor-pointer hover:scale-105 active:scale-90 transition-transform"
+        >
+          <Icon
+            name="heart"
+            size={14}
+            style={{
+              fill: isFav ? 'var(--red)' : 'none',
+              color: isFav ? 'var(--red)' : 'var(--ink-3)',
+            }}
+          />
+        </button>
       </div>
       
       <div className="px-3 pb-3 pt-1.5 flex flex-col flex-1">

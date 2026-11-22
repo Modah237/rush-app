@@ -36,6 +36,35 @@ export interface ActiveRiderPoint {
   status: 'available' | 'delivering';
 }
 
+export interface CameroonLandmark {
+  id: string;
+  name: string;
+  cityId: string;
+  cityName: string;
+  quarter: string;
+  category: 'carrefour' | 'mall' | 'transport' | 'sante' | 'institution';
+  lat: number;
+  lng: number;
+}
+
+export interface PlaceSearchResult {
+  id: string;
+  label: string;
+  sublabel: string;
+  lat: number;
+  lng: number;
+  cityId?: string;
+  zoneId?: string;
+  source: 'local' | 'osm';
+}
+
+export interface RoadRouteResult {
+  points: [number, number][];
+  distanceKm: number;
+  durationMinutes: number;
+  source: 'osrm' | 'haversine';
+}
+
 export const CAMEROON_OVERVIEW = {
   center: [5.65, 11.85] as [number, number],
   zoom: 6,
@@ -244,6 +273,32 @@ export const ACTIVE_CAMEROON_RIDERS: ActiveRiderPoint[] = [
   { id: 'r6', name: 'Alain B.', vehicle: 'Moto Yamaha', cityId: 'yaounde', quarter: 'Centre-Ville', lat: 3.8682, lng: 11.5194, status: 'delivering' },
 ];
 
+export const CAMEROON_LANDMARKS: CameroonLandmark[] = [
+  // Douala
+  { id: 'lm-dgm', name: 'Douala Grand Mall', cityId: 'douala', cityName: 'Douala', quarter: 'Bonapriso / Aéroport', category: 'mall', lat: 4.0204, lng: 9.7131 },
+  { id: 'lm-deido', name: 'Rond-point Deido', cityId: 'douala', cityName: 'Douala', quarter: 'Deido', category: 'carrefour', lat: 4.0644, lng: 9.7121 },
+  { id: 'lm-ndokotti', name: 'Carrefour Ndokotti', cityId: 'douala', cityName: 'Douala', quarter: 'Ndokotti', category: 'carrefour', lat: 4.0511, lng: 9.7407 },
+  { id: 'lm-akwa-palace', name: 'Boulevard de la Liberté (Akwa)', cityId: 'douala', cityName: 'Douala', quarter: 'Akwa', category: 'carrefour', lat: 4.0532, lng: 9.6986 },
+  { id: 'lm-santalucia-bona', name: 'Santa Lucia Bonamoussadi', cityId: 'douala', cityName: 'Douala', quarter: 'Bonamoussadi', category: 'mall', lat: 4.0884, lng: 9.7366 },
+  { id: 'lm-parcours-vita', name: 'Parcours Vita Makepe', cityId: 'douala', cityName: 'Douala', quarter: 'Makepe', category: 'carrefour', lat: 4.0757, lng: 9.7469 },
+  { id: 'lm-hopital-gen', name: 'Hôpital Général de Douala', cityId: 'douala', cityName: 'Douala', quarter: 'Beedi / Maképè', category: 'sante', lat: 4.0858, lng: 9.7607 },
+  { id: 'lm-bonaberi-rail', name: 'Rond-point 4e Bonabéri', cityId: 'douala', cityName: 'Douala', quarter: 'Bonabéri', category: 'carrefour', lat: 4.0761, lng: 9.6584 },
+  { id: 'lm-port-bonanjo', name: 'Place du Gouvernement (Bonanjo)', cityId: 'douala', cityName: 'Douala', quarter: 'Bonanjo', category: 'institution', lat: 4.0419, lng: 9.6873 },
+  { id: 'lm-logpom-bassong', name: 'Carrefour Bassong (Logpom)', cityId: 'douala', cityName: 'Douala', quarter: 'Logpom', category: 'carrefour', lat: 4.0938, lng: 9.7692 },
+  // Yaoundé
+  { id: 'lm-poste', name: 'Poste Centrale Yaoundé', cityId: 'yaounde', cityName: 'Yaoundé', quarter: 'Centre-Ville', category: 'institution', lat: 3.8667, lng: 11.5167 },
+  { id: 'lm-bastos', name: 'Carrefour Bastos', cityId: 'yaounde', cityName: 'Yaoundé', quarter: 'Bastos', category: 'carrefour', lat: 3.8923, lng: 11.5131 },
+  { id: 'lm-playce', name: 'Playce Yaoundé (Warda)', cityId: 'yaounde', cityName: 'Yaoundé', quarter: 'Warda', category: 'mall', lat: 3.8722, lng: 11.5122 },
+  { id: 'lm-biyem-express', name: 'Rond-point Express Biyem-Assi', cityId: 'yaounde', cityName: 'Yaoundé', quarter: 'Biyem-Assi', category: 'carrefour', lat: 3.8442, lng: 11.4847 },
+  { id: 'lm-mvan-tropik', name: 'Carrefour Mvan', cityId: 'yaounde', cityName: 'Yaoundé', quarter: 'Mvan', category: 'transport', lat: 3.8253, lng: 11.5162 },
+  { id: 'lm-essos', name: 'Carrefour Essos', cityId: 'yaounde', cityName: 'Yaoundé', quarter: 'Essos', category: 'carrefour', lat: 3.8736, lng: 11.5442 },
+  // Autres villes
+  { id: 'lm-bfx-place', name: 'Place des Fêtes Bafoussam', cityId: 'bafoussam', cityName: 'Bafoussam', quarter: 'Tamja', category: 'institution', lat: 5.4778, lng: 10.4176 },
+  { id: 'lm-kribi-phare', name: 'Phare de Kribi', cityId: 'kribi', cityName: 'Kribi', quarter: 'Kribi Centre', category: 'carrefour', lat: 2.9396, lng: 9.9036 },
+  { id: 'lm-limbe-botanic', name: 'Limbe Botanic Garden', cityId: 'limbe', cityName: 'Limbé', quarter: 'Half Mile', category: 'institution', lat: 4.0176, lng: 9.1984 },
+  { id: 'lm-buea-molyko', name: 'Molyko University Junction', cityId: 'buea', cityName: 'Buea', quarter: 'Molyko', category: 'carrefour', lat: 4.1527, lng: 9.241 },
+];
+
 /**
  * Calcule la distance réelle en km entre deux coordonnées GPS (formule de Haversine).
  */
@@ -301,6 +356,17 @@ export function findNearestCameroonZone(lat: number, lng: number): CameroonZone 
  */
 export function resolveLocationFromText(text: string): { lat: number; lng: number; label: string; cityName: string } {
   const normalized = text.toLowerCase();
+  const matchedLandmark = CAMEROON_LANDMARKS.find((lm) =>
+    normalized.includes(lm.name.toLowerCase())
+  );
+  if (matchedLandmark) {
+    return {
+      lat: matchedLandmark.lat,
+      lng: matchedLandmark.lng,
+      label: `${matchedLandmark.cityName}, ${matchedLandmark.name}`,
+      cityName: matchedLandmark.cityName,
+    };
+  }
   const matchedZone = CAMEROON_ZONES.find(
     (z) =>
       normalized.includes(z.name.toLowerCase()) ||
@@ -330,4 +396,174 @@ export function resolveLocationFromText(text: string): { lat: number; lng: numbe
     label: 'Douala, Akwa',
     cityName: 'Douala',
   };
+}
+
+/**
+ * Recherche instantanée dans les repères camerounais + géocodage OpenStreetMap Nominatim (countrycodes=cm).
+ */
+export async function searchCameroonPlaces(query: string, includeRemote = true): Promise<PlaceSearchResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const q = trimmed.toLowerCase();
+
+  const localResults: PlaceSearchResult[] = [];
+
+  for (const lm of CAMEROON_LANDMARKS) {
+    if (
+      lm.name.toLowerCase().includes(q) ||
+      lm.quarter.toLowerCase().includes(q) ||
+      lm.cityName.toLowerCase().includes(q)
+    ) {
+      const nearest = findNearestCameroonZone(lm.lat, lm.lng);
+      localResults.push({
+        id: lm.id,
+        label: lm.name,
+        sublabel: `${lm.cityName} · ${lm.quarter}`,
+        lat: lm.lat,
+        lng: lm.lng,
+        cityId: lm.cityId,
+        zoneId: nearest.id,
+        source: 'local',
+      });
+    }
+  }
+
+  for (const z of CAMEROON_ZONES) {
+    if (
+      z.name.toLowerCase().includes(q) ||
+      z.landmark.toLowerCase().includes(q) ||
+      z.cityName.toLowerCase().includes(q)
+    ) {
+      localResults.push({
+        id: `z-${z.id}`,
+        label: `${z.name}, ${z.cityName}`,
+        sublabel: `${z.landmark} · ${z.etaMinutes} min`,
+        lat: z.lat,
+        lng: z.lng,
+        cityId: z.cityId,
+        zoneId: z.id,
+        source: 'local',
+      });
+    }
+  }
+
+  if (!includeRemote || trimmed.length < 3 || typeof fetch === 'undefined') {
+    return localResults.slice(0, 6);
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=cm&limit=5&addressdetails=1&q=${encodeURIComponent(trimmed)}`;
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) return localResults.slice(0, 6);
+    const data = (await res.json()) as Array<{
+      place_id: number;
+      display_name: string;
+      lat: string;
+      lon: string;
+    }>;
+
+    const remoteResults: PlaceSearchResult[] = data.map((item) => {
+      const lat = parseFloat(item.lat);
+      const lng = parseFloat(item.lon);
+      const nearest = findNearestCameroonZone(lat, lng);
+      const parts = item.display_name.split(',').map((s) => s.trim());
+      return {
+        id: `osm-${item.place_id}`,
+        label: parts.slice(0, 2).join(', '),
+        sublabel: parts.slice(2, 4).join(', ') || `${nearest.cityName} · Cameroun`,
+        lat,
+        lng,
+        cityId: nearest.cityId,
+        zoneId: nearest.id,
+        source: 'osm',
+      };
+    });
+
+    return [...localResults.slice(0, 4), ...remoteResults].slice(0, 8);
+  } catch {
+    return localResults.slice(0, 6);
+  }
+}
+
+/**
+ * Calcule un vrai itinéraire routier au Cameroun via OSRM, avec repli automatique sur Haversine.
+ */
+export async function fetchRoadRoute(
+  start: [number, number],
+  end: [number, number]
+): Promise<RoadRouteResult> {
+  const fallbackDist = calculateDistanceKm(start[0], start[1], end[0], end[1]);
+  const fallbackEstimate = estimateCameroonDelivery(fallbackDist);
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      return {
+        points: [start, end],
+        distanceKm: fallbackDist,
+        durationMinutes: fallbackEstimate.etaMinutes,
+        source: 'haversine',
+      };
+    }
+
+    const data = (await res.json()) as {
+      routes?: Array<{
+        distance: number;
+        duration: number;
+        geometry: { coordinates: [number, number][] };
+      }>;
+    };
+
+    const route = data.routes?.[0];
+    if (!route || !route.geometry?.coordinates?.length) {
+      return {
+        points: [start, end],
+        distanceKm: fallbackDist,
+        durationMinutes: fallbackEstimate.etaMinutes,
+        source: 'haversine',
+      };
+    }
+
+    const points: [number, number][] = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    const roadDistKm = Math.max(0.4, Math.round((route.distance / 1000) * 10) / 10);
+    // Moto urbaine Douala/Yaoundé ~25% plus rapide qu'une voiture dans les embouteillages + 6 min de préparation
+    const motoMinutes = Math.max(10, Math.round((route.duration / 60) * 0.8 + 6));
+
+    return {
+      points,
+      distanceKm: roadDistKm,
+      durationMinutes: motoMinutes,
+      source: 'osrm',
+    };
+  } catch {
+    return {
+      points: [start, end],
+      distanceKm: fallbackDist,
+      durationMinutes: fallbackEstimate.etaMinutes,
+      source: 'haversine',
+    };
+  }
+}
+
+/**
+ * Génère un code PIN de remise à 4 chiffres déterministe à partir de la référence commande.
+ */
+export function generateDeliveryPin(orderId: string): string {
+  let hash = 0;
+  for (let i = 0; i < orderId.length; i++) {
+    hash = (hash * 31 + orderId.charCodeAt(i)) % 9000;
+  }
+  return String(1000 + Math.abs(hash));
 }
