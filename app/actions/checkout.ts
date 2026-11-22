@@ -129,16 +129,23 @@ export async function placeOrder({
   const isUuid = (val: string | null | undefined): boolean =>
     Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
 
+  let authUserId: string | null = null;
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    authUserId = user?.id ?? null;
+  } catch {
+    // Session utilisateur optionnelle (invité ou exécution hors requête HTTP)
+  }
+
+  try {
     const adminDb = await createAdminClient();
     const dbStatus: OrderStatus = paymentMethod === 'cash' ? 'confirmed' : 'pending';
     const dbShopId = isUuid(primaryShopId) ? primaryShopId : null;
 
     const { error: orderError } = await adminDb.from('orders').insert({
       id: orderId,
-      user_id: user?.id ?? null,
+      user_id: authUserId,
       shop_id: dbShopId,
       status: dbStatus,
       subtotal,
@@ -281,4 +288,49 @@ export async function placeOrder({
     message: 'Commande validée avec succès.',
     orderSummary,
   };
+}
+
+/**
+ * Synchronise en temps réel une commande issue de l'Arène Agents IA GTA
+ * directement dans la table public.orders de Supabase.
+ */
+export async function syncGtaOrderToDatabase(order: Order): Promise<{ success: boolean }> {
+  try {
+    const adminDb = await createAdminClient();
+    const platformFee = Math.round(order.subtotal * 0.10) + Math.round(order.delivery_fee * 0.20);
+    const vendorPayout = order.subtotal - Math.round(order.subtotal * 0.10);
+    const courierPayout = order.delivery_fee - Math.round(order.delivery_fee * 0.20) + (order.tip_amount || 0);
+
+    const { error } = await adminDb.from('orders').upsert(
+      {
+        id: order.id,
+        user_id: null,
+        shop_id: null,
+        status: order.status,
+        subtotal: order.subtotal,
+        delivery_fee: order.delivery_fee,
+        discount_amount: order.discount_amount,
+        total_amount: order.total_amount,
+        delivery_address: order.delivery_address,
+        delivery_phone: order.delivery_phone,
+        courier_name: order.courier_name,
+        courier_phone: order.courier_phone,
+        eta_minutes: order.eta_minutes,
+        note: order.note,
+        platform_commission_rate: 0.10,
+        platform_fee: platformFee,
+        vendor_payout: vendorPayout,
+        courier_payout: courierPayout,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+
+    if (error) {
+      return { success: false };
+    }
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
 }

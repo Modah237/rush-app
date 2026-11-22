@@ -12,6 +12,7 @@ import {
 } from '@/lib/gta-agents';
 import { MOCK_SHOPS } from '@/lib/mock-data';
 import { useRushStore } from '@/context/rush-store-context';
+import { syncGtaOrderToDatabase } from '@/app/actions/checkout';
 import { formatPrice } from '@/lib/utils';
 import { orderPath } from '@/lib/routes';
 
@@ -38,34 +39,35 @@ export default function GtaSimulationPage() {
     results: ServerAuditResult[];
   } | null>(null);
 
-  // Sync les nouvelles commandes GTA dans RushStore pour pouvoir ouvrir /orders/[reference]
-  const syncOrdersIntoStore = (nextWorld: GtaWorldState, prevOrdersCount: number) => {
-    if (nextWorld.orders.length > prevOrdersCount) {
-      const diff = nextWorld.orders.length - prevOrdersCount;
-      nextWorld.orders.slice(0, diff).forEach((o) => addLocalOrder(o));
-    }
-    nextWorld.orders.forEach((o) => {
-      updateOrderStatus(o.id, o.status);
+  // Sync les nouvelles commandes GTA dans RushStore ET dans Supabase PostgreSQL
+  const syncedOrdersRef = React.useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    const prevMap = syncedOrdersRef.current;
+    world.orders.forEach((o) => {
+      const prevStatus = prevMap.get(o.id);
+      if (!prevStatus) {
+        prevMap.set(o.id, o.status);
+        addLocalOrder(o);
+        syncGtaOrderToDatabase(o).catch(() => {});
+      } else if (prevStatus !== o.status) {
+        prevMap.set(o.id, o.status);
+        updateOrderStatus(o.id, o.status);
+        syncGtaOrderToDatabase(o).catch(() => {});
+      }
     });
-  };
+  }, [world.orders, addLocalOrder, updateOrderStatus]);
 
   useEffect(() => {
     if (!isRunning) return;
     const timer = setInterval(() => {
-      setWorld((prev) => {
-        const next = stepGtaSimulation(prev);
-        return next;
-      });
+      setWorld((prev) => stepGtaSimulation(prev));
     }, speedMs);
     return () => clearInterval(timer);
   }, [isRunning, speedMs]);
 
   const handleManualStep = (batchCount?: number, runChaos?: boolean) => {
-    setWorld((prev) => {
-      const next = stepGtaSimulation(prev, { spawnBatchCount: batchCount, runChaosCheck: runChaos });
-      syncOrdersIntoStore(next, prev.orders.length);
-      return next;
-    });
+    setWorld((prev) => stepGtaSimulation(prev, { spawnBatchCount: batchCount, runChaosCheck: runChaos }));
   };
 
   const handleReset = () => {
